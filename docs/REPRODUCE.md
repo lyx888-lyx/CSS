@@ -27,7 +27,7 @@ python -c "import torch, numpy, scipy, sklearn, pandas; print(torch.__version__,
 
 If using a CUDA GPU, check `nvidia-smi` and install a PyTorch 2.3.0 wheel compatible with that system's driver/CUDA setup from the official PyTorch previous-versions instructions. Do not assume that the PyPI default wheel matches your CUDA environment. The model is heavy (`hidden_dim=1024`) and training can require significant GPU memory.
 
-Notes: The upstream source imported `numba`, `pyarrow`, and `matplotlib` without listing them in requirements. The first two are unused and have been removed from `model.py`; matplotlib is still imported by both training files upstream but is unused. If they remain present in your checkout and `matplotlib` is not installed, install `matplotlib` (or use the prepared branch after the import cleanup). Optional `--tensorboard` requires `tensorboardX`.
+Notes: The upstream source imported `numba`, `pyarrow`, and `matplotlib` without listing them in requirements. These unused imports were removed in this preparation branch, avoiding extra packages for baseline execution. Optional `--tensorboard` requires `tensorboardX`. The optional TensorBoard per-task loss logging was corrected without changing the optimization path.
 
 ## 3. Download assets
 
@@ -46,6 +46,12 @@ checkpoints/meld.pt               # rename or supply actual downloaded filename
 ```
 
 Only load pickles from trusted sources: Python pickle data can execute code during deserialization.
+
+Run the quick CPU model checks before downloading data:
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 Run the structural integrity check:
 ```bash
