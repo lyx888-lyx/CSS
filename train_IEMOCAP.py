@@ -1,10 +1,7 @@
 import os
 
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
-import matplotlib.pyplot as plt
-from sklearn.manifold import TSNE
 import numpy as np, argparse, time
 import torch
 import torch.optim as optim
@@ -164,7 +161,7 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
                 writer.add_scalar('weights/task3_weight', weights[2], epoch)
 
 
-                for i, task_loss in enumerate(losses):
+                for i, task_loss in enumerate(individual_losses):
                     writer.add_scalar(f'losses/task{i + 1}_loss', task_loss.item(), epoch)
                 writer.add_scalar('losses/total_loss', loss.item(), epoch)
 

@@ -1,10 +1,8 @@
 import math
 import numpy as np
-from numba.cuda import lanemask_lt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from pyarrow.dataset import dataset
 from torch.nn.functional import dropout
 
 
@@ -122,7 +120,7 @@ class PGM(nn.Module):
             constraints=constraints
         )
 
-        alpha = torch.from_numpy(res.x).float().cuda()
+        alpha = torch.from_numpy(res.x).to(device=grads[0].device, dtype=grads[0].dtype)
         return alpha
 
     def forward(self, outputs, labels_, umask, shared_params):
@@ -555,10 +553,10 @@ class Transformer_Based_Model(nn.Module):
         origin_spk_idx = spk_idx
         if self.n_speakers == 2:
             for i, x in enumerate(dia_len):
-                spk_idx[i, x:] = (2 * torch.ones(origin_spk_idx[i].size(0) - x)).int().cuda()
+                spk_idx[i, x:] = 2
         if self.n_speakers == 9:
             for i, x in enumerate(dia_len):
-                spk_idx[i, x:] = (9 * torch.ones(origin_spk_idx[i].size(0) - x)).int().cuda()
+                spk_idx[i, x:] = 9
         spk_embeddings = self.speaker_embeddings(spk_idx)
 
 

@@ -10,6 +10,8 @@ We hope our work can be helpful to you. As this code is mainly developed for res
   <img src="data/CSS_main.png" alt="Framework" width="80%">
 </p>
 
+For environment setup, data checks, checkpoint evaluation, and reproduction caveats, see [Replication preflight](docs/REPRODUCE.md).
+
 ## Requirements
 
 The required Python packages are listed in `requirements.txt`. Please install them before running the code:
