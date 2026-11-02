@@ -96,29 +96,13 @@ def speaker_identity(one_hot):
     return a.argmax(-1).astype(int).tolist()
 
 
-def validate_and_load_checkpoints(paths):
-    ckpts = []
-    for path in paths:
-        # Only load research checkpoints YOU generated: torch.load unpickles data.
-        obj = torch.load(path, map_location="cpu", weights_only=False)
-        for key in ("model_state_dict", "valid_dialogue_indices", "config"):
-            if key not in obj:
-                raise ValueError(f"{path}: missing {key}")
-        ckpts.append(obj)
-
-    reference = ckpts[0]
-    ref_config = reference["config"]
-    ref_indices = reference["valid_dialogue_indices"]
-    for path, obj in zip(paths[1:], ckpts[1:]):
-        if obj["config"]["dataset"] != ref_config["dataset"]:
-            raise ValueError(f"{path}: inconsistent dataset")
-        if obj["valid_dialogue_indices"] != ref_indices:
-            raise ValueError(f"{path}: inconsistent validation split")
-        if obj["config"]["classes"] != ref_config["classes"]:
-            raise ValueError(f"{path}: inconsistent label count")
-        if obj["config"]["seed"] != ref_config["seed"]:
-            raise ValueError(f"{path}: inconsistent seed")
-    return ckpts
+def read_checkpoint(path):
+    # Only load research checkpoints YOU generated: torch.load unpickles data.
+    obj = torch.load(path, map_location="cpu", weights_only=False)
+    for key in ("model_state_dict", "valid_dialogue_indices", "config"):
+        if key not in obj:
+            raise ValueError(f"{path}: missing {key}")
+    return obj
 
 
 @torch.no_grad()
@@ -148,8 +132,9 @@ def predict_valid(model, loader, device):
 
 
 def analyze_checkpoints(paths, device):
-    ckpts = validate_and_load_checkpoints(paths)
-    config = ckpts[0]["config"]
+    first = read_checkpoint(paths[0])
+    config = first["config"]
+    valid_indices = first["valid_dialogue_indices"]
     if config["dataset"] == "MELD":
         ds = MELDDataset("data/meld_multimodal_features.pkl", train=True)
     elif config["dataset"] == "IEMOCAP":
@@ -157,32 +142,40 @@ def analyze_checkpoints(paths, device):
     else:
         raise ValueError("unsupported dataset")
     loader = DataLoader(
-        Subset(ds, ckpts[0]["valid_dialogue_indices"]),
+        Subset(ds, valid_indices),
         batch_size=config["batch_size"], shuffle=False, collate_fn=ds.collate_fn
     )
     report = {
         "dataset": config["dataset"],
         "split": "validation_only",
         "seed": config["seed"],
-        "dialogues": len(ckpts[0]["valid_dialogue_indices"]),
+        "dialogues": len(valid_indices),
         "notice": ("Per-group labels are used only for post-prediction analysis. "
                    "Differences do not establish causality or robustness."),
         "models": [],
     }
     reference_y, reference_tags = None, None
-    for path, ckpt in zip(paths, ckpts):
-        model = build_model(ckpt["config"]).to(device)
+    for i, path in enumerate(paths):
+        # Load ONE large checkpoint at a time to bound RAM usage.
+        ckpt = first if i == 0 else read_checkpoint(path)
+        conf = ckpt["config"]
+        if (conf["dataset"] != config["dataset"]
+            or conf["seed"] != config["seed"]
+            or conf["classes"] != config["classes"]
+            or ckpt["valid_dialogue_indices"] != valid_indices):
+            raise ValueError(f"{path}: inconsistent dataset/seed/validation split")
+        model = build_model(conf).to(device)
         model.load_state_dict(ckpt["model_state_dict"], strict=True)
         y, pred, tags = predict_valid(model, loader, device)
         if reference_y is None:
             reference_y, reference_tags = y, tags
         elif reference_y != y or reference_tags != tags:
             raise RuntimeError("misaligned validation utterances")
-        scores = compute_report(y, pred, tags, config["classes"])
+        scores = compute_report(y, pred, tags, conf["classes"])
         report["models"].append({
             "checkpoint": str(path),
-            "speaker_mode": ckpt["config"]["speaker_mode"],
-            "time_decay": ckpt["config"]["time_decay"],
+            "speaker_mode": conf["speaker_mode"],
+            "time_decay": conf["time_decay"],
             "selected_epoch": ckpt["epoch"],
             "saved_validation_f1": ckpt["validation_f1"],
             "scores": scores,
@@ -194,7 +187,7 @@ def analyze_checkpoints(paths, device):
             f'stable F1={scores["stable"]["weighted_f1"]:.2f}',
             flush=True
         )
-        del model
+        del model, ckpt
         if device.type == "cuda":
             torch.cuda.empty_cache()
     return report
