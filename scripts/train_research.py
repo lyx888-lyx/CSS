@@ -34,9 +34,28 @@ DEFAULTS = {
 }
 
 
-def get_loaders(dataset, batch_size, ratio, seed):
+def dialogue_split_indices(n_dialogues, ratio, split_seed):
+    """Stable dialogue-level indices independent of model initialization seed.
+
+    One Dataset item is one complete conversation. The split is fully
+    determined by its ordering, ratio, and split_seed. No test dialogue
+    indices are included.
+    """
     if not 0.0 < ratio < 1.0:
         raise ValueError("validation ratio must be strictly between 0 and 1")
+    if n_dialogues < 2:
+        raise ValueError("need at least two training dialogues")
+    shuffled = np.random.default_rng(split_seed).permutation(n_dialogues)
+    count = max(1, int(round(n_dialogues * ratio)))
+    if count >= n_dialogues:
+        raise ValueError("validation split leaves no training dialogues")
+    valid_indices = sorted(int(x) for x in shuffled[:count])
+    train_indices = sorted(int(x) for x in shuffled[count:])
+    assert not set(train_indices).intersection(valid_indices)
+    return train_indices, valid_indices
+
+
+def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None):
     if dataset == "IEMOCAP":
         trainset = IEMOCAPDataset()
         testset = IEMOCAPDataset(train=False)
@@ -45,19 +64,17 @@ def get_loaders(dataset, batch_size, ratio, seed):
         trainset = MELDDataset(path, train=True)
         testset = MELDDataset(path, train=False)
 
-    # Split by dialogue index (Dataset item is a whole conversation), not utterance.
-    shuffled = np.random.default_rng(seed).permutation(len(trainset))
-    count = max(1, int(round(len(trainset) * ratio)))
-    if count >= len(trainset):
-        raise ValueError("validation split leaves no training dialogues")
-    valid_indices = sorted(int(x) for x in shuffled[:count])
-    train_indices = sorted(int(x) for x in shuffled[count:])
-    assert not set(train_indices).intersection(valid_indices)
+    train_indices, valid_indices = dialogue_split_indices(
+        len(trainset), ratio, split_seed
+    )
+    # Shuffle training dialogues independently of the validation split.
+    # If train_seed is omitted, retain legacy shuffle seed behavior.
+    shuffle_seed = split_seed if train_seed is None else train_seed
 
     train_loader = DataLoader(
         Subset(trainset, train_indices), batch_size=batch_size, shuffle=True,
         collate_fn=trainset.collate_fn, num_workers=0,
-        generator=torch.Generator().manual_seed(seed + 1000)
+        generator=torch.Generator().manual_seed(shuffle_seed + 1000)
     )
     valid_loader = DataLoader(
         Subset(trainset, valid_indices), batch_size=batch_size, shuffle=False,
@@ -90,6 +107,8 @@ def make_config(args):
     return {
         "dataset": args.dataset,
         "seed": d["seed"] if args.seed is None else args.seed,
+        "split_seed": (d["seed"] if args.seed is None else args.seed)
+                      if args.split_seed is None else args.split_seed,
         "epochs": d["epochs"] if args.epochs is None else args.epochs,
         "lr": d["lr"] if args.lr is None else args.lr,
         "order": d["order"] if args.order is None else args.order,
@@ -118,7 +137,10 @@ def evaluate_test(model, loader, trainer, ckpt_path):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--dataset", choices=DEFAULTS, default="MELD")
-    p.add_argument("--seed", type=int, default=None)
+    p.add_argument("--seed", type=int, default=None,
+                   help="Model initialization, shuffle and stochastic training seed")
+    p.add_argument("--split-seed", type=int, default=None,
+                   help="Dialogue split seed; defaults to --seed for backward compatibility")
     p.add_argument("--epochs", type=int, default=None)
     p.add_argument("--lr", type=float, default=None)
     p.add_argument("--order", type=int, default=None)
@@ -171,9 +193,15 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
 
     train_loader, valid_loader, test_loader, train_idx, valid_idx = get_loaders(
-        dataset, config["batch_size"], config["valid_ratio"], config["seed"]
+        dataset, config["batch_size"], config["valid_ratio"],
+        config.get("split_seed", config["seed"]), train_seed=config["seed"]
     )
     model = build_model(config).to(device)
+    if checkpoint is None:
+        # Experimental layers consume RNG state during initialization. Restore
+        # identical training RNG streams across CSS-off and CSS-on runs with
+        # the same train seed. Initial common CSS weights remain identical.
+        trainer.set_seed(config["seed"])
     if checkpoint is not None:
         model.load_state_dict(checkpoint["model_state_dict"])
         evaluate_test(model, test_loader, trainer, args.checkpoint)
@@ -182,6 +210,8 @@ def main():
     print(json.dumps({"config": config,
                       "train_dialogues": len(train_idx),
                       "valid_dialogues": len(valid_idx),
+                      "train_seed": config["seed"],
+                      "split_seed": config.get("split_seed", config["seed"]),
                       "test_selection": "never"},
                      indent=2, ensure_ascii=False))
     if dataset == "IEMOCAP":
@@ -228,6 +258,8 @@ def main():
                 "train_dialogue_indices": train_idx,
                 "valid_dialogue_indices": valid_idx,
                 "selection": "validation_weighted_f1",
+                "split_seed": config.get("split_seed", config["seed"]),
+                "train_seed": config["seed"],
             }, path)
         print(f"epoch={epoch+1} train_loss={train_loss:.4f} "
               f"train_acc={train_acc:.2f} train_f1={train_f1:.2f} "
