@@ -475,7 +475,9 @@ class SPFusion(nn.Module):
 
 class Transformer_Based_Model(nn.Module):
     def __init__(self, dataset, temp, D_text, D_visual, D_audio, n_head,rank,poly_order,
-                 n_classes, hidden_dim, n_speakers, dropout):
+                 n_classes, hidden_dim, n_speakers, dropout,
+                 speaker_history_mode=None, speaker_history_decay=True,
+                 speaker_history_lag=None):
         super(Transformer_Based_Model, self).__init__()
         self.temp = temp
         self.n_classes = n_classes
@@ -530,7 +532,6 @@ class Transformer_Based_Model(nn.Module):
 
 
         self.last_gate = SPFusion(hidden_dim, rank, poly_order, output_dim=hidden_dim)
-
         self.t_output_layer = nn.Sequential(
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -547,6 +548,18 @@ class Transformer_Based_Model(nn.Module):
             nn.Linear(hidden_dim, n_classes)
         )
         self.all_output_layer = nn.Linear(hidden_dim, n_classes)
+
+        # Initialize original CSS layers before any optional experiment layers.
+        if speaker_history_mode is not None:
+            from research.speaker_interaction import SpeakerHistoryFusion
+            self.speaker_history = SpeakerHistoryFusion(
+                hidden_dim, mode=speaker_history_mode,
+                use_decay=speaker_history_decay, max_lag=speaker_history_lag
+            )
+        else:
+            self.speaker_history = None
+
+
 
     def forward(self, textf, visuf, acouf, u_mask, qmask, dia_len):
         spk_idx = torch.argmax(qmask, -1)
@@ -605,6 +618,10 @@ class Transformer_Based_Model(nn.Module):
 
 
         all_transformer_out = self.last_gate(t_transformer_out, a_transformer_out, v_transformer_out)
+        if self.speaker_history is not None:
+            all_transformer_out = self.speaker_history(
+                all_transformer_out, spk_idx, u_mask.bool()
+            )
 
 
         t_final_out = self.t_output_layer(t_transformer_out)
