@@ -55,3 +55,30 @@ separate baseline retraining.
 5. Report weighted F1, macro F1, per-class F1, transition-focused results,
    mean and std over at least three seeds, and any inference-time overhead.
 6. Never claim causal effect without extra supporting experimental design.
+
+## Stage-1b: gap-stratified follow-up
+
+The initial same-speaker change-rate comparison (with vs without
+intervening other speakers) **cannot** separate speaker interaction
+from utterance distance: without an intervening other speaker the two
+consecutive turns are necessarily adjacent (gap=1), whereas with an
+intervening speaker the return gap is necessarily >=2.
+
+A second, still descriptive diagnostic reports differences *within*
+interleaved turns, grouped by distance and by whether the immediately
+preceding other speaker's annotated emotion equals the target
+speaker's previous annotated emotion:
+
+```bash
+python -m unittest discover -s tests -v
+python scripts/analyze_speaker_interactions.py --dataset MELD --out results/meld_train_return_gaps.json
+python scripts/analyze_speaker_interactions.py --dataset IEMOCAP --out results/iemocap_train_return_gaps.json
+```
+
+These diagnostics use TRAIN annotated emotions only and must NEVER
+be turned into inference-time features. Last-other agreement and
+class-dependent transition frequencies are not proof of emotional
+contagion. Stratification alone does not remove other confounders.
+
+Do not promote new modules or paper novelty claims based solely on
+these descriptive rates.
