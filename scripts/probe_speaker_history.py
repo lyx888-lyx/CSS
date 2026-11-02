@@ -40,7 +40,7 @@ def get_validation_loader(ckpt):
 
 
 def change_report(y, p1, p0, categories, n_classes):
-    if y != y or len(y) != len(p1) or len(y) != len(p0):
+    if len(y) != len(p1) or len(y) != len(p0):
         raise ValueError("misaligned predictions")
     r1 = compute_report(y, p1, categories, n_classes)
     r0 = compute_report(y, p0, categories, n_classes)
