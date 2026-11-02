@@ -22,6 +22,19 @@ class TestOptInIntegration(unittest.TestCase):
         after.load_state_dict(before.state_dict(), strict=True)
         self.assertIsNone(after.speaker_history)
 
+    def test_seeded_original_weights_identical_with_optional_module(self):
+        # Adding the speaker module must not alter initialization of
+        # any original CSS parameter for a given seed.
+        torch.manual_seed(234)
+        baseline = toy_model(mode=None)
+        torch.manual_seed(234)
+        extended = toy_model(mode="both")
+        common = baseline.state_dict()
+        extended_state = extended.state_dict()
+        for key, expected in common.items():
+            with self.subTest(parameter=key):
+                self.assertTrue(torch.equal(expected, extended_state[key]))
+
     def test_speaker_history_full_forward_and_gradient(self):
         torch.manual_seed(11)
         model = toy_model(mode="both")
