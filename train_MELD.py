@@ -224,6 +224,11 @@ if __name__ == '__main__':
     parser.add_argument('--class-weight', action='store_true', default=True, help='use class weights')
     parser.add_argument('--Dataset', default='MELD', help='dataset to train and test')
     parser.add_argument('--seed', type=int, default=10068, help='random seed')
+    parser.add_argument('--speaker-history-mode', default='off',
+                        choices=['off', 'self', 'other', 'both'],
+                        help='Optional V0 history branch; off is original CSS')
+    parser.add_argument('--speaker-history-no-decay', action='store_true',
+                        help='Disable V0 time-decay (only if history branch enabled)')
     parser.add_argument('--save-best-dir', default='checkpoints', help='directory for best checkpoint')
     parser.add_argument('--run-name', default=None, help='checkpoint name prefix')
     parser.add_argument('--checkpoint', default=None, help='checkpoint path to load')
@@ -266,7 +271,9 @@ if __name__ == '__main__':
                                     n_classes=n_classes,
                                     hidden_dim=args.hidden_dim,
                                     n_speakers=n_speakers,
-                                    dropout=args.dropout)
+                                    dropout=args.dropout,
+                                    speaker_history_mode=(None if args.speaker_history_mode == 'off' else args.speaker_history_mode),
+                                    speaker_history_decay=(not args.speaker_history_no_decay))
     total_params = sum(p.numel() for p in model.parameters())
     print('total parameters: {}'.format(total_params))
     total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -327,6 +334,7 @@ if __name__ == '__main__':
 
     best_fscore, best_loss, best_label, best_pred, best_mask = None, None, None, None, None
     best_acc = None
+    best_epoch = None
     all_fscore, all_acc, all_loss = [], [], []
 
     for e in range(n_epochs):
@@ -362,6 +370,7 @@ if __name__ == '__main__':
                 is_best = True
 
         if is_best:
+            best_epoch = e + 1
             os.makedirs(args.save_best_dir, exist_ok=True)
             checkpoint_path = os.path.join(args.save_best_dir, '{}_best.pt'.format(args.run_name))
             torch.save({
@@ -428,3 +437,10 @@ if __name__ == '__main__':
 
     print(classification_report(best_label, best_pred, sample_weight=best_mask, digits=4))
     print(confusion_matrix(best_label, best_pred, sample_weight=best_mask))
+
+
+    # Machine-readable one-line result for tmux logs, without changing the
+    # original author's selection rule (best TEST weighted F1).
+    print('AUTHOR_PROTOCOL_BEST epoch={} test_acc={} test_weighted_f1={} checkpoint={}'.format(
+        best_epoch, best_acc, best_fscore, checkpoint_path), flush=True)
+    print('AUTHOR_PROTOCOL_NOTE test_set_used_for_epoch_selection=true', flush=True)
