@@ -125,6 +125,7 @@ def make_config(args):
         "max_lag": args.max_lag,
         "precontext_mode": getattr(args, "precontext_mode", "off"),
         "v11_consistency_lambda": getattr(args, "v11_consistency_lambda", 0.0),
+        "v11_probe_gradient": getattr(args, "v11_probe_gradient", False),
     }
 
 
@@ -164,6 +165,8 @@ def main():
                    default="off", help="V1 experimental pre-context difference module")
     p.add_argument("--v11-consistency-lambda", type=float, default=0.0,
                    help="Train-only V1.1 consistency on stable-after-other returns; zero disables")
+    p.add_argument("--v11-probe-gradient", action="store_true",
+                   help="Log auxiliary-vs-PGM gradient ratio on one training batch per epoch")
     p.add_argument("--no-time-decay", action="store_true")
     p.add_argument("--max-lag", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
@@ -197,6 +200,8 @@ def main():
     coefficient = config.get("v11_consistency_lambda", 0.0)
     if coefficient < 0:
         p.error("--v11-consistency-lambda must be nonnegative")
+    if config.get("v11_probe_gradient", False) and coefficient == 0:
+        p.error("--v11-probe-gradient requires --v11-consistency-lambda > 0")
     if coefficient > 0 and (config["speaker_mode"] != "off"
                             or config.get("precontext_mode", "off") != "other"):
         p.error("V1.1 consistency requires --speaker-mode off --precontext-mode other")
@@ -212,6 +217,7 @@ def main():
     trainer.args = argparse.Namespace(
         tensorboard=False,
         v11_consistency_lambda=config.get("v11_consistency_lambda", 0.0),
+        v11_probe_gradient=config.get("v11_probe_gradient", False),
     )
     device = torch.device("cuda" if use_cuda else "cpu")
 
