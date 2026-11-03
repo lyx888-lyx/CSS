@@ -56,7 +56,7 @@ def temporarily_ablate_history_paths(model, mode):
     """
     if mode not in MODES:
         raise ValueError(f"expected one of {MODES}, got {mode!r}")
-    blocks = model.precontext_shift
+    blocks = getattr(model, "precontext_shift", None)
     if blocks is None or not isinstance(blocks, torch.nn.ModuleDict):
         raise ValueError("expected a model with trained V1 ModuleDict")
     handles = []
