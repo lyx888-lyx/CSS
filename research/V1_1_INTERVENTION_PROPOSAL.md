@@ -203,3 +203,66 @@ the same small validation set. Conversely, a nontrivial gradient is
 necessary but insufficient evidence of usefulness.
 
 No 100-epoch V1.1 run has been verified at this point.
+
+## Decision after measured auxiliary gradients — single V1.1 lambda=2.5 pilot
+
+Actual one-batch first-epoch gradients on three `other_diff.weight` matrices:
+
+| Component | Norm |
+| --- | ---: |
+| PGM gradient | 3.63007151e-02 |
+| Raw consistency KL gradient | 1.35916183e-04 |
+| Weighted KL at lambda=0.05 | 6.79580917e-06 |
+| Weighted KL / PGM | 1.87208686e-04 = 0.01872% |
+
+The first observed loss KL=0.00002323, selected stable-after-other
+training utterances=2085. These observations demonstrate the auxiliary
+loss is active but *very weak on this batch*; this is not evidence
+that the underlying regularizer is useless in later epochs.
+
+A single **exploratory**, fixed lambda=2.5 is chosen:
+`0.05 * (0.01 / 0.000187208686) ≈ 2.67`, rounded down to 2.5.
+At the SAME first-batch raw gradients, that would be ~0.936% of PGM
+gradient norm. This **does not** predict training gradients or accuracy.
+We commit to one run at lambda=2.5, not a broad validation-set
+hyperparameter search. This target of ~1% is a heuristic only.
+
+Run the following from the checked-out branch (only ONE model trains):
+
+```bash
+cd /code/CSS
+conda activate cmdpad
+git pull --ff-only origin research/v1-1-intervention-proposal
+python -m unittest discover -s tests -v
+tmux new-session -d -s css_v11_pilot \
+  'cd /code/CSS && bash scripts/run_v11_lambda2p5_pilot.sh'
+```
+
+The script preflights GPU/data and finds previously trained CSS and
+V1-other checkpoints in `results/v1_meld_pair_last_run.txt`.
+It trains 100 epochs with `--v11-probe-gradient` (once per epoch),
+selects checkpoint via VALID weighted F1, **never selects on TEST**,
+then re-evaluates CSS, V1-other, V1.1 on the identical validation split
+and writes a group comparison. No baseline retraining.
+
+To read results (including failures) after the tmux session exits:
+
+```bash
+cd /code/CSS
+R=$(cat results/v11_lambda2p5_pilot_last_run.txt)
+cat "$R/status.txt"
+cat "$R/summary.txt"
+tail -n 15 "$R/train.log"
+```
+
+The run directory contains:
+- `protocol.txt` with fixed lambda and baseline checkpoint paths
+- `train.log` with per-epoch KL/gradient/training + validation results
+- `checkpoints/v11_lambda2p5_s10068_valid_best.pt`
+- `validation_comparison.json` / `.log` for three checkpoints
+- `summary.txt` with overall/stable/changed/after-other weighted F1
+- `status.txt` recording RUNNING, COMPLETE, or FAILED
+
+A failure in the summary does not destroy the checkpoint; diagnose
+and recover only the summary without retraining. A one-seed result
+is insufficient for a final improvement claim.
