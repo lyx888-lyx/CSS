@@ -159,3 +159,47 @@ survive additional seeds and dataset checks.
 
 **This is a feasibility pilot, NOT a verified independent novelty or
 submission-ready contribution.**
+
+## Additional preflight after first real MELD smoke test (2026-11-03)
+
+Observed from user:
+- `stable_after_other_used=2085` TRAIN utterances;
+- `mean_consistency_kl=0.00002323` in epoch 1;
+- `lambda=0.05`, so rough mean weighted KL
+  `lambda * KL = 1.1615e-6`, versus total train loss `1.8627`;
+- epoch-1 validation W-F1=32.80%, not an efficacy result.
+
+**Important:** Comparing numerical loss values alone does NOT reveal how
+strongly the consistency term updates parameters. To avoid spending
+100 epochs with a potentially negligible regularizer, we added
+`--v11-probe-gradient`. The diagnostic samples the first TRAIN batch
+with at least one selected stable-after-other utterance each epoch.
+It computes two gradients *without changing parameters*:
+`g_pgm = d(L_PGM)/d(theta)` and
+`g_aux = lambda * d(KL)/d(theta)`, where theta is the three V1
+`other_diff.weight` matrices. It reports the ratio of L2 norms
+`||g_aux|| / ||g_pgm||`. This is only a **one-batch, selected-parameter**
+diagnostic, not a whole-training gradient estimate.
+
+Run once with **a different checkpoint name** from the prior smoke:
+
+```bash
+cd /code/CSS
+conda activate cmdpad
+git pull --ff-only origin research/v1-1-intervention-proposal
+python -m unittest discover -s tests -v
+python -u -m scripts.train_research \
+  --dataset MELD --seed 10068 --split-seed 10068 \
+  --speaker-mode off --precontext-mode other \
+  --v11-consistency-lambda 0.05 --v11-probe-gradient \
+  --epochs 1 --run-name v11_gradient_probe_s10068
+```
+
+Report the `V11_GRAD_DIAG` and `V11_TRAIN_DIAG` lines. If the
+auxiliary gradient ratio is extremely small, the proposed penalty may
+be inert at coefficient 0.05. The next research step should be
+pre-specified loss scaling or redesign, **not** an arbitrary sweep over
+the same small validation set. Conversely, a nontrivial gradient is
+necessary but insufficient evidence of usefulness.
+
+No 100-epoch V1.1 run has been verified at this point.
