@@ -147,7 +147,6 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
             consistency, n_stable = v11_training_consistency_loss(
                 model,
                 (textf, visuf, acouf, umask, qmask, lengths),
-                outputs[4],
                 label,
                 qmask.argmax(-1),
                 umask.bool(),
