@@ -85,6 +85,9 @@ def get_IEMOCAP_loaders(batch_size=32, valid=0.1, num_workers=0, pin_memory=Fals
 def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimizer=None, train=False):
     losses, preds, labels, masks = [], [], [], []
     PGM_loss = PGM(loss_function, kl_loss)
+    v11_selected_total = 0
+    v11_kl_numerator = 0.0
+    v11_gradient_probed = False
 
     assert not train or optimizer != None
     if train:
@@ -139,6 +142,46 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
             shared_params
         )
 
+        # V1.1 opt-in TRAIN-ONLY loss. Default 0 preserves the original
+        # CSS PGM objective and the author's original evaluation behavior.
+        v11_weight = getattr(args, "v11_consistency_lambda", 0.0)
+        if train and v11_weight > 0:
+            from research.v11_intervention import v11_training_consistency_loss
+            consistency, n_stable = v11_training_consistency_loss(
+                model,
+                (textf, visuf, acouf, umask, qmask, lengths),
+                label,
+                qmask.argmax(-1),
+                umask.bool(),
+            )
+            if (n_stable > 0 and not v11_gradient_probed
+                    and getattr(args, "v11_probe_gradient", False)):
+                from research.v11_intervention import measure_auxiliary_gradient_ratio
+                other_weights = [
+                    block.other_diff.weight
+                    for block in model.precontext_shift.values()
+                ]
+                diagnostic = measure_auxiliary_gradient_ratio(
+                    loss, consistency, v11_weight, other_weights
+                )
+                print(
+                    "V11_GRAD_DIAG epoch={} "
+                    "pgm_grad_norm={:.8e} raw_kl_grad_norm={:.8e} "
+                    "weighted_kl_grad_norm={:.8e} "
+                    "weighted_to_pgm_grad_ratio={:.8e}".format(
+                        epoch + 1,
+                        diagnostic["pgm_grad_norm"],
+                        diagnostic["raw_kl_grad_norm"],
+                        diagnostic["weighted_kl_grad_norm"],
+                        diagnostic["weighted_to_pgm_grad_ratio"]
+                    ),
+                    flush=True
+                )
+                v11_gradient_probed = True
+            loss = loss + v11_weight * consistency
+            v11_selected_total += n_stable
+            v11_kl_numerator += consistency.detach().item() * n_stable
+
         all_prob = outputs[4]
         pred_ = torch.argmax(all_prob.view(-1, all_prob.size()[2]), 1)
 
@@ -175,6 +218,17 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
     avg_loss = round(np.sum(losses) / np.sum(masks), 4)
     avg_accuracy = round(accuracy_score(labels, preds, sample_weight=masks) * 100, 2)
     avg_fscore = round(f1_score(labels, preds, sample_weight=masks, average='weighted') * 100, 2)
+
+    if train and getattr(args, "v11_consistency_lambda", 0.0) > 0:
+        avg_kl = v11_kl_numerator / max(1, v11_selected_total)
+        print(
+            "V11_TRAIN_DIAG epoch={} stable_after_other_used={} "
+            "mean_consistency_kl={:.8f} lambda={:.4f}".format(
+                epoch + 1, v11_selected_total, avg_kl,
+                args.v11_consistency_lambda
+            ),
+            flush=True
+        )
 
     # plot_tsne(outputs[9], labels_)
     return avg_loss, avg_accuracy, labels, preds, masks, avg_fscore
