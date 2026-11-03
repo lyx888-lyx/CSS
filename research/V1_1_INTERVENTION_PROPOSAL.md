@@ -266,3 +266,65 @@ The run directory contains:
 A failure in the summary does not destroy the checkpoint; diagnose
 and recover only the summary without retraining. A one-seed result
 is insufficient for a final improvement claim.
+
+
+## 2026-11-03 full lambda=2.5 MELD pilot — NEGATIVE result / PAUSE
+
+User completed all 100 epochs under the **validation-only** protocol,
+seed=10068, split seed=10068, validation 115 dialogues, official TEST
+untouched. Saved original checkpoint and logs remain valid.
+
+| Variant | Overall VALID weighted F1 | Stable | Changed | Changed-after-other |
+| --- | ---: | ---: | ---: | ---: |
+| CSS | 73.59 | 82.25 | 63.69 | 64.42 |
+| V1-other independent training | 73.55 | 81.59 | 63.35 | 64.23 |
+| V1.1 consistency lambda=2.5 | **60.16** | **69.68** | **48.50** | **52.08** |
+
+Delta V1.1 vs CSS: **-13.43 pp overall**, -12.57 pp stable,
+-15.19 pp changed, -12.34 pp changed-after-other.
+
+Run directory:
+`results/v11_lambda2p5_pilot/20261103_081906`
+
+- `train.log`: epoch-by-epoch train and validation metrics, auxiliary
+  KL, gradient ratio on first eligible batch per epoch
+- `validation_comparison.json`: independently re-evaluated metrics for
+  CSS, V1-other, V1.1 on identical validation dialogues
+- `checkpoints/v11_lambda2p5_s10068_valid_best.pt`: selected V1.1 model
+- `summary.txt`: final cross-model results
+
+**Decision:** STOP further lambda increases and blind lambda sweeps.
+The first-epoch gradient-norm ratio on just three other_diff weights
+cannot calibrate a training-wide loss coefficient. Selecting lambda=2.5
+from that one diagnostic was insufficiently justified. A negative
+single-run result does not isolate the reason (loss strength, teacher
+quality, optimization conflict, or objective mismatch).
+
+Crucial conceptual limitation: V1.1's 'intervention' zeros only the
+added other_diff projections. Original CSS bidirectional context
+attention *still mixes all prior and future speakers*. Therefore the
+zero-path teacher is NOT a genuine other-speaker-absent counterfactual,
+and the objective does not guarantee preservation of discriminative
+emotion information. KL can be reduced by making output
+distributions insensitive to this path, not necessarily more correct.
+
+**Next action:** read existing training logs for best epoch, validation
+trajectory and how per-batch KL/gradient ratio evolved; no training
+required. Preserve failure as negative evidence. Avoid claiming that
+a single regularizer setting disproves all speaker-history robustness
+learning. If research continues, redesign the intervention at a
+well-defined information boundary and measure its validity before
+running further full experiments.
+
+Read-only server commands:
+
+```bash
+cd /code/CSS
+R=$(cat results/v11_lambda2p5_pilot_last_run.txt)
+grep '^Selected epoch=' "$R/train.log"
+grep '^epoch=' "$R/train.log" | awk 'NR==1 || NR%10==0 || NR==100'
+grep '^V11_GRAD_DIAG' "$R/train.log" | awk 'NR==1 || NR%10==0 || NR==100'
+grep '^V11_TRAIN_DIAG' "$R/train.log" | awk 'NR==1 || NR%10==0 || NR==100'
+```
+
+These results do not justify reporting V1.1 as a method improvement.
