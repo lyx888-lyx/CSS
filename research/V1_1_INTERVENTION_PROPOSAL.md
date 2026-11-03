@@ -1,6 +1,6 @@
 # V1.1 Research Decision — Speaker-specific history sensitivity (proposal only)
 
-Date: 2026-11-03. **NO V1.1 MODEL CODE or trained checkpoint in this branch.**
+Date: 2026-11-03. **V1.1 pilot code is now implemented, but has NOT been run on MELD.**
 This document records evidence, potential novelty overlap, falsifiable hypotheses,
 and a controlled implementation order; it is not a claim of originality.
 
@@ -50,14 +50,18 @@ not just another self/other attention gate.
    physical deletion of another participant's full utterance, and
    is NOT a causal identification procedure. The CSS contextual
    encoders remain bidirectional.
-3. For TRAIN utterances only, identify stable speaker returns by
-   comparing the current labeled emotion with that speaker's previous
-   labeled emotion. Use gold labels only as a **training loss mask**,
-   never as a feature and never at validation/inference.
-4. Apply a small consistency penalty on **stable returns** that have
-   an available other-speaker history:
-   `L_consistency = KL(stopgrad(p_mask) || p_full)`.
-   Continue the original PGM supervised objective on the full pass.
+3. For TRAIN utterances only, identify **stable-after-other** returns
+   by comparing the current label with the same speaker's prior label,
+   while requiring at least one intervening other-speaker turn.
+   Use gold labels only as a **training loss mask**, never as a model
+   feature and never at validation/inference.
+4. Apply a small consistency penalty on **stable-after-other** returns:
+   `L_consistency = KL(stopgrad(p_mask_eval) || p_full_eval)`.
+   Compute BOTH auxiliary distributions in evaluation mode (Dropout
+   disabled) to avoid confounding history intervention with stochastic
+   dropout. Continue the original PGM supervised objective on its
+   separate TRAIN-mode pass. The extra regularizer requires two extra
+   forwards (only one has gradient), so training will be slower.
    **Do not** force changed samples to be sensitive to history, since
    a change need not have been triggered by another speaker.
 5. Inference uses the normal model once; no masking, no previous
@@ -112,13 +116,46 @@ augmentation are **NOT** novel by themselves. This pilot must show a
 specific training-time mechanism and independent benefits, and a
 thorough literature audit is required before claiming novelty.
 
-## Immediate development action (not a user GPU request)
+## Implementation status and first server action
 
-Inspect `PGM` in `model.py` and `train_MELD.train_or_eval_model` to
-integrate the extra loss **without changing the original CSS PGM
-loss or unintentionally duplicating backward passes**. Then add
-synthetic CPU tests for stable-mask construction and gradient flow,
-and finally a 1-epoch smoke test before full training.
+The current pilot implementation includes:
 
-Do not start any new overnight run before this design/implementation
-audit is complete.
+- `research/v11_intervention.py`: stable-after-other TRAIN loss mask;
+  temporary removal of V1 other-history residual; masked categorical KL
+  with detached masked-path teacher.
+- `train_MELD.py`: opt-in auxiliary TRAIN loss **added after** original
+  PGM task weighting. With lambda=0, the original model loss is unchanged.
+  Prints `V11_TRAIN_DIAG epoch=... stable_after_other_used=... mean_consistency_kl=...`
+  for verification.
+- `scripts/train_research.py`: option
+  `--v11-consistency-lambda`, requires `--speaker-mode off`
+  and `--precontext-mode other`; the original TEST remains unexamined.
+- `tests/test_v11_intervention.py`: synthetic mask, hook, KL gradient,
+  training-only and empty-mask checks.
+
+**First run: TEST THE CODE, not 100 epochs.**
+
+```bash
+cd /code/CSS
+conda activate cmdpad
+git fetch origin
+git switch research/v1-1-intervention-proposal
+python -m unittest discover -s tests -v
+python -u -m scripts.train_research \
+  --dataset MELD --seed 10068 --split-seed 10068 \
+  --speaker-mode off --precontext-mode other \
+  --v11-consistency-lambda 0.05 --epochs 1 \
+  --run-name v11_consistency_smoke_s10068
+```
+
+Confirm the epoch output includes `V11_TRAIN_DIAG` with
+`stable_after_other_used > 0`, valid dialogues=115, and a saved
+checkpoint. A 1-epoch F1 is NOT an effectiveness claim.
+
+Only after this passes should a full matched 100-epoch run be made,
+and compared to the already trained V1-other checkpoint under the
+same dialogue split and training seed. Any apparent improvement must
+survive additional seeds and dataset checks.
+
+**This is a feasibility pilot, NOT a verified independent novelty or
+submission-ready contribution.**
