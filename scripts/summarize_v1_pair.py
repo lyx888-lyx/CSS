@@ -10,8 +10,11 @@ import torch
 def load_best(path):
     if not path.is_file():
         raise FileNotFoundError(f"Missing checkpoint: {path}")
-    # Trusted, locally generated checkpoint. weights_only restricts unpickling.
-    ckpt = torch.load(path, map_location="cpu", weights_only=True)
+    # PyTorch's restricted weights-only unpickler cannot deserialize all
+    # NumPy scalar values saved by the original CSS training metrics (e.g.
+    # numpy.core.multiarray.scalar). This file comes from this local run, so
+    # full unpickling is acceptable here. NEVER run this on untrusted .pt files.
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
     if ckpt.get("selection") != "validation_weighted_f1":
         raise ValueError(f"{path} is not a validation-selected checkpoint")
     cfg = ckpt["config"]
