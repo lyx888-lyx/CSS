@@ -65,25 +65,31 @@ def masked_categorical_kl(teacher_prob, student_prob, mask):
     return (per_turn * select).sum() / select.sum().clamp_min(1)
 
 
-def v11_training_consistency_loss(model, inputs, student_prob, labels, speaker_ids, valid_mask):
-    """Teacher: remove other residual; student: original full V1 forward.
+def v11_training_consistency_loss(model, inputs, labels, speaker_ids, valid_mask):
+    """Compare eval-mode full-V1 vs eval-mode other-history-path removal.
 
-    Assumes inputs=(textf,visuf,acouf,umask,qmask,lengths), each before
-    model.forward. Teacher uses eval mode to disable stochastic dropout;
-    student_prob was computed in training mode with normal dropout.
+    Assumes inputs=(textf,visuf,acouf,umask,qmask,lengths).
+    The supervised PGM pass is separately computed in TRAIN mode.
+    Both predictions in this path-specific consistency loss use EVAL
+    mode, preventing dropout noise from masquerading as history effect.
+    The full-path student is differentiable; the masked-path teacher
+    is detached. No true labels are included in model inputs.
     """
-    if student_prob.ndim != 3 or labels.shape != student_prob.shape[:2]:
-        raise ValueError("student probabilities and labels mismatch")
     eligible = stable_after_other_training_mask(labels, speaker_ids, valid_mask)
     if not bool(eligible.any()):
-        return student_prob.sum() * 0.0, 0
+        # Do not run extra forwards for batches with no eligible returns.
+        return next(model.parameters()).sum() * 0.0, 0
 
     was_training = model.training
     try:
         model.eval()
+        student_prob = model(*inputs)[4]  # with gradients
+        if student_prob.shape[:2] != labels.shape:
+            raise ValueError("student probabilities and labels mismatch")
         with torch.no_grad():
             with without_v1_other_residual(model):
                 teacher_prob = model(*inputs)[4]
+        loss = masked_categorical_kl(teacher_prob, student_prob, eligible)
     finally:
         model.train(was_training)
-    return masked_categorical_kl(teacher_prob, student_prob, eligible), int(eligible.sum().item())
+    return loss, int(eligible.sum().item())
