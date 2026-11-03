@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 import torch
+import numpy as np
 
 from scripts.summarize_v1_pair import summarize
 
@@ -12,18 +13,20 @@ def save_dummy(path, mode, validation_indices=None, seed=10068):
     valid = [1, 3] if validation_indices is None else validation_indices
     torch.save({
         "selection": "validation_weighted_f1",
-        "epoch": 52,
-        "validation_f1": 73.50 if mode == "off" else 74.00,
-        "validation_accuracy": 74.50,
+        # Original CSS trainer may persist NumPy scalar values rather than
+        # only ordinary Python floats; these previously broke weights_only.
+        "epoch": np.int64(52),
+        "validation_f1": np.float32(73.50 if mode == "off" else 74.00),
+        "validation_accuracy": np.float64(74.50),
         "model_state_dict": {"toy": torch.ones(1)},
         "config": {
-            "seed": seed,
-            "split_seed": 10068,
+            "seed": np.int64(seed),
+            "split_seed": np.int64(10068),
             "precontext_mode": mode,
             "speaker_mode": "off",
         },
         "train_dialogue_indices": [0, 2, 4],
-        "valid_dialogue_indices": valid,
+        "valid_dialogue_indices": [np.int64(i) for i in valid],
     }, path)
 
 
