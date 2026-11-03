@@ -18,21 +18,26 @@ def stable_after_other_training_mask(labels, speaker_ids, valid_mask):
     if labels.ndim != 2 or speaker_ids.shape != labels.shape or valid_mask.shape != labels.shape:
         raise ValueError("labels, speaker IDs, mask must share [B,L]")
     bsz, seq_len = labels.shape
-    result = torch.zeros_like(valid_mask, dtype=torch.bool)
-    valid = valid_mask.bool()
-    # Non-vectorized reference is transparent; MELD/IEMOCAP dialogues short.
+    # Move only the small discrete metadata to CPU once. Avoid synchronizing
+    # GPU one scalar at a time for every dialogue position in 100 epochs.
+    y = labels.detach().cpu().tolist()
+    sp = speaker_ids.detach().cpu().tolist()
+    valid = valid_mask.detach().bool().cpu().tolist()
+    rows = []
     for b in range(bsz):
         previous = {}
+        selected = [False] * seq_len
         for t in range(seq_len):
-            if not bool(valid[b, t]):
+            if not valid[b][t]:
                 continue
-            speaker = int(speaker_ids[b, t])
+            speaker = int(sp[b][t])
             if speaker in previous:
                 j = previous[speaker]
-                if t - j > 1 and bool(labels[b, j] == labels[b, t]):
-                    result[b, t] = True
+                if t - j > 1 and y[b][j] == y[b][t]:
+                    selected[t] = True
             previous[speaker] = t
-    return result
+        rows.append(selected)
+    return torch.tensor(rows, dtype=torch.bool, device=valid_mask.device)
 
 
 @contextmanager
