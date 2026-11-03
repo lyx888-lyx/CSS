@@ -63,6 +63,7 @@ def validate_and_summarize(reports):
             "mode": mode, "selected_epoch": report["selected_epoch"],
             "checkpoint": report["checkpoint"],
             "scores": {k: score[k] for k in GROUPS},
+            "history_bins": score.get("history_bins", {}),
             "delta_vs_current_pp": {
                 k: None if score[k]["weighted_f1"] is None
                 or current[k]["weighted_f1"] is None
@@ -107,6 +108,15 @@ def main():
             f"{fmt('changed'):>13} {fmt('changed_after_other'):>19} "
             f"{d:>+9.2f}pp"
         )
+    print("\\nHistory-count breakdown: 0, 1, 2, >=3 prior turns by same speaker")
+    print("Mode                 h=0       h=1       h=2      h>=3")
+    for r in result["rows"]:
+        hb = r["history_bins"]
+        def hfmt(k):
+            v = hb.get(k, {}).get("weighted_f1")
+            return "N/A" if v is None else f"{v:.2f}%"
+        print(f"{r['mode']:<18} {hfmt('0'):>8} {hfmt('1'):>9} "
+              f"{hfmt('2'):>9} {hfmt('3+'):>9}")
     print("Selected best epochs:")
     for r in result["rows"]:
         print(f"  {r['mode']}: {r['selected_epoch']}")
