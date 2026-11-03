@@ -19,14 +19,14 @@ def load_best(path):
         raise ValueError(f"{path} is not a validation-selected checkpoint")
     cfg = ckpt["config"]
     return {
-        "epoch": ckpt["epoch"],
-        "validation_weighted_f1": ckpt["validation_f1"],
-        "validation_accuracy": ckpt["validation_accuracy"],
-        "train_seed": cfg["seed"],
-        "split_seed": cfg.get("split_seed", cfg["seed"]),
+        "epoch": int(ckpt["epoch"]),
+        "validation_weighted_f1": float(ckpt["validation_f1"]),
+        "validation_accuracy": float(ckpt["validation_accuracy"]),
+        "train_seed": int(cfg["seed"]),
+        "split_seed": int(cfg.get("split_seed", cfg["seed"])),
         "training_dialogues": len(ckpt["train_dialogue_indices"]),
         "validation_dialogues": len(ckpt["valid_dialogue_indices"]),
-        "validation_indices": ckpt["valid_dialogue_indices"],
+        "validation_indices": [int(i) for i in ckpt["valid_dialogue_indices"]],
         "precontext_mode": cfg.get("precontext_mode", "off"),
         "speaker_mode": cfg["speaker_mode"],
         "checkpoint": str(path),
