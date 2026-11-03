@@ -153,3 +153,50 @@ directory and existing V0 / author-protocol checkpoints are preserved.
 Only after this matched first pair should we decide whether
 multi-seed, speaker-shift subgroup or modality-level ablation experiments
 are warranted.
+
+## Step 4: Explain V1's actual effect before designing V1.1
+
+The first matched validation pair (train seed=10068, split seed=10068,
+115 dialogues, 1044 utterances) produced:
+
+| Subset | CSS weighted F1 | V1 weighted F1 | V1-CSS |
+| --- | ---: | ---: | ---: |
+| overall | 73.59 | 73.24 | -0.35 pp |
+| first speaker turn | 76.69 | 77.55 | +0.86 pp |
+| stable vs own previous turn | 82.25 | 80.76 | -1.49 pp |
+| changed vs own previous turn | 63.69 | 63.53 | -0.16 pp |
+| stable after another speaker | 86.27 | 84.72 | -1.55 pp |
+| changed after another speaker | 64.42 | 64.53 | +0.11 pp |
+
+The class-level F1 decreases for Disgust (-2.43 pp) and Anger
+(-2.19 pp) are descriptive only and may be unstable at one split/seed.
+
+Interpretation: the V1 pre-context difference block is not yet a
+verified improvement for emotion transitions. In particular, a positive
+0.11 pp change on `changed_after_other` is too small to support an
+inter-speaker influence claim. Also, first speaker appearances can
+have **other-speaker** history, even though they have no own history.
+
+A no-retraining, validation-only *paired error migration* diagnosis now
+quantifies how many utterances V1 corrected, broke or changed to
+different wrong classes. It does not use the official TEST split.
+
+```bash
+cd /code/CSS
+git pull --ff-only origin experiment/v1-precontext-shift-probe
+python -m unittest discover -s tests -v
+R=$(cat results/v1_meld_pair_last_run.txt)
+
+python -m scripts.diagnose_v1_errors \
+  --css "$R/checkpoints/css_valid_best.pt" \
+  --v1 "$R/checkpoints/v1_precontext_valid_best.pt" \
+  --output "$R/paired_errors.json"
+```
+
+The report prints `fixed` (CSS wrong -> V1 correct), `broken`
+(CSS correct -> V1 wrong), `predicted_label_changed`, and net
+correctness for all, stable, changed, first, after-other groups and
+each true emotion class. Its unit tests use only synthetic arrays.
+Do not over-interpret one seed; subsequent V1.1 interventions should
+be selected **only on validation**, ideally with multiple seeds and
+dialogue-level uncertainty estimates.
