@@ -477,7 +477,7 @@ class Transformer_Based_Model(nn.Module):
     def __init__(self, dataset, temp, D_text, D_visual, D_audio, n_head,rank,poly_order,
                  n_classes, hidden_dim, n_speakers, dropout,
                  speaker_history_mode=None, speaker_history_decay=True,
-                 speaker_history_lag=None):
+                 speaker_history_lag=None, precontext_shift_mode=None):
         super(Transformer_Based_Model, self).__init__()
         self.temp = temp
         self.n_classes = n_classes
@@ -559,6 +559,18 @@ class Transformer_Based_Model(nn.Module):
         else:
             self.speaker_history = None
 
+        # Initialize V1 only AFTER original CSS and optional V0 modules,
+        # preserving shared seeded CSS weights across all experimental modes.
+        if precontext_shift_mode is not None:
+            from research.precontext_shift import PreContextSpeakerShift
+            self.precontext_shift = nn.ModuleDict({
+                'text': PreContextSpeakerShift(hidden_dim, mode=precontext_shift_mode),
+                'audio': PreContextSpeakerShift(hidden_dim, mode=precontext_shift_mode),
+                'visual': PreContextSpeakerShift(hidden_dim, mode=precontext_shift_mode),
+            })
+        else:
+            self.precontext_shift = None
+
 
 
     def forward(self, textf, visuf, acouf, u_mask, qmask, dia_len):
@@ -588,6 +600,14 @@ class Transformer_Based_Model(nn.Module):
             gate_vision = torch.sigmoid(self.bias_gate_vision(text_bias))
             visuf = (1 - gate_vision) * visuf + gate_vision * (visuf + proj_vision_bias)
 
+
+        # V1 uses only modality-projected representations *before* any
+        # full-dialogue contextual attention. No true emotion labels are used.
+        if self.precontext_shift is not None:
+            valid_turns = u_mask.bool()
+            textf = self.precontext_shift['text'](textf, spk_idx, valid_turns)
+            acouf = self.precontext_shift['audio'](acouf, spk_idx, valid_turns)
+            visuf = self.precontext_shift['visual'](visuf, spk_idx, valid_turns)
 
         t_t_transformer_out = self.t_t(textf, textf, u_mask, spk_embeddings)
         #

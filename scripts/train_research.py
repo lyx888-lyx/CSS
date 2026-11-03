@@ -98,6 +98,10 @@ def build_model(config):
         ),
         speaker_history_decay=config["time_decay"],
         speaker_history_lag=config["max_lag"],
+        precontext_shift_mode=(
+            None if config.get("precontext_mode", "off") == "off"
+            else config["precontext_mode"]
+        ),
     )
     return model
 
@@ -119,6 +123,7 @@ def make_config(args):
         "l2": args.l2, "valid_ratio": args.valid_ratio,
         "speaker_mode": args.speaker_mode, "time_decay": not args.no_time_decay,
         "max_lag": args.max_lag,
+        "precontext_mode": getattr(args, "precontext_mode", "off"),
     }
 
 
@@ -154,6 +159,8 @@ def main():
     p.add_argument("--valid-ratio", type=float, default=0.1)
     p.add_argument("--speaker-mode", choices=("off", "self", "other", "both"),
                    default="off")
+    p.add_argument("--precontext-mode", choices=("off", "self", "other", "both"),
+                   default="off", help="V1 experimental pre-context difference module")
     p.add_argument("--no-time-decay", action="store_true")
     p.add_argument("--max-lag", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
@@ -180,6 +187,10 @@ def main():
             p.error("epochs must be positive")
         if config["max_lag"] is not None and config["max_lag"] < 1:
             p.error("max-lag must be positive")
+
+    if (config["speaker_mode"] != "off"
+        and config.get("precontext_mode", "off") != "off"):
+        p.error("V0 speaker-mode and V1 precontext-mode must not both be enabled")
 
     dataset = config["dataset"]
     trainer = importlib.import_module(
@@ -228,7 +239,8 @@ def main():
                            weight_decay=config["l2"])
 
     run_name = args.run_name or (
-        f'{dataset.lower()}_{config["speaker_mode"]}_seed{config["seed"]}'
+        f'{dataset.lower()}_{config["speaker_mode"]}_'
+        f'{config.get("precontext_mode", "off")}_seed{config["seed"]}'
     )
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
     path = args.checkpoint_dir / f"{run_name}_valid_best.pt"
