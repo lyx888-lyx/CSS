@@ -98,3 +98,43 @@ def v11_training_consistency_loss(model, inputs, labels, speaker_ids, valid_mask
     finally:
         model.train(was_training)
     return loss, int(eligible.sum().item())
+
+
+def measure_auxiliary_gradient_ratio(supervised_loss, consistency_loss, coefficient, params):
+    """One-batch diagnostic: ||lambda*g_cons|| / ||g_PGM|| on selected V1 weights.
+
+    Measures only gradients of the three V1 other_diff weight matrices,
+    *before* optimizer weight decay. It must not write .grad or update
+    parameters and must be called before loss.backward(). This is a
+    diagnostic, not a proof that an objective is useful or negligible.
+    """
+    params = tuple(params)
+    if not params:
+        raise ValueError("provide trainable V1 other-difference parameters")
+    if coefficient < 0:
+        raise ValueError("coefficient must be nonnegative")
+    base_grad = torch.autograd.grad(
+        supervised_loss, params, retain_graph=True, allow_unused=True
+    )
+    aux_grad = torch.autograd.grad(
+        consistency_loss, params, retain_graph=True, allow_unused=True
+    )
+
+    def norm(grads):
+        squares = [
+            g.detach().float().square().sum()
+            for g in grads if g is not None
+        ]
+        if not squares:
+            return 0.0
+        return float(torch.stack(squares).sum().sqrt().item())
+
+    base = norm(base_grad)
+    aux = norm(aux_grad)
+    scaled = float(coefficient) * aux
+    return {
+        "pgm_grad_norm": base,
+        "raw_kl_grad_norm": aux,
+        "weighted_kl_grad_norm": scaled,
+        "weighted_to_pgm_grad_ratio": scaled / max(base, 1e-12),
+    }
