@@ -193,6 +193,7 @@ def run(args):
 
     result = {
         "config": metadata, "selected_epoch": best_epoch,
+        "valid_dialogue_indices": valid_idx,
         "validation_utterances": n_valid,
         "validation": best_report, "epoch_trace": trace,
         "checkpoint": str(checkpoint),
