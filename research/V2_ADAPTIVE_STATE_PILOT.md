@@ -151,3 +151,80 @@ No generic first-order memory gate, exponential decay, or external
 speaker features suffice for a novel paper contribution. V2's
 purpose is to test whether a GREY-INSPIRED inductive bias deserves
 further mathematically distinct, reproducible research.
+
+## User-run complete 12-epoch five-arm pilot (2026-11-03)
+
+The user reports completed full train/validation split,
+single seed=10068, split seed=10068, 115 validation dialogues,
+with official TEST untouched.
+
+| Mode | Overall weighted F1 | Stable | Changed | Changed-after-other | Best epoch |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| current | 72.12 | 79.35 | 60.83 | 61.02 | 6 |
+| last | 72.29 | 81.70 | 60.95 | 60.73 | **12** |
+| ema | **72.48** | **82.24** | **61.47** | **62.26** | 4 |
+| adaptive | 71.90 | 81.14 | 60.14 | 60.30 | 6 |
+| adaptive_other | 72.11 | 80.28 | 60.92 | 61.52 | **12** |
+
+Observation: at this one seed, EMA beats the current-only model on
+overall weighted F1 (+0.36 pp), stable (+2.89 pp), changed (+0.64 pp)
+and after-other changed (+1.24 pp). Neither learned adaptive state
+nor the exogenous-other branch beats EMA.
+
+Adding other-speaker input to separately trained adaptive:
+overall +0.21 pp, changed +0.78 pp,
+changed-after-other +1.22 pp, but still worse than EMA.
+These are model comparisons, **not** intervention estimates of an
+other-speaker effect. `last` and `adaptive_other` select the
+last available epoch (12); thus results might be training-budget
+limited. Do not run a full 100-epoch CSS integration on this evidence.
+
+Short-history bucket weighted F1:
+
+| Mode | 0 prior own turns | 1 | 2 | >=3 |
+| --- | ---: | ---: | ---: | ---: |
+| current | **78.63** | 71.38 | 72.66 | 66.30 |
+| last | 76.27 | **73.42** | **75.24** | 66.78 |
+| ema | 75.50 | 73.37 | 73.01 | **68.79** |
+| adaptive | 76.99 | 71.03 | 71.69 | 68.00 |
+| adaptive_other | 77.29 | 70.95 | 74.89 | 66.74 |
+
+These bins are disjoint by amount of *previous own-speaker history*.
+The different `0` scores arise from independently trained
+parameters; they are not evidence that a history branch acted
+on turns with no own-speaker history. In adaptive_other, a speaker
+can have prior OTHER-speaker evidence even at first own turn.
+
+### Read-only next diagnostic: paired error migration + external path
+
+We added:
+- `scripts/diagnose_v2_state_paths.py`: read four trained
+  checkpoints and evaluate on the SAME 115 validation dialogues,
+  alongside a temporary inference intervention that zeros the
+  `adaptive_other` model's learned `other_projection` output.
+  Reports 5 model score rows and paired `fixed`/`broken` counts
+  for EMA vs adaptive models and external-path ablation. Also
+  reports learned damping and raw other-speaker gain at selected
+  checkpoint.
+- `tests/test_v2_state_paths.py`: synthetic CPU tests that
+  validate cohort matching, feature-path hook restoration and
+  paired error migration.
+
+```bash
+cd /code/CSS
+conda activate cmdpad
+git pull --ff-only origin experiment/v2-adaptive-speaker-state-pilot
+python -m unittest discover -s tests -v
+R=$(cat results/v2_speaker_state_suite_last_run.txt)
+python -m scripts.diagnose_v2_state_paths \
+  --suite "$R" --output "$R/paired_errors.json"
+```
+
+Do not overinterpret the external-vector intervention. The same
+trained classifier still sees availability flags for other-speaker
+history, and its full model state parameters remain trained for
+other inputs. This intervention is NOT a separately trained
+`adaptive` variant or human emotional causal effect.
+Only proceed with multi-seed/longer-training controls if evidence
+and the research question justify them; freeze V2 adaptive
+hypothesis if EMA continues to dominate.
