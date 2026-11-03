@@ -88,9 +88,8 @@ class TestV11Consistency(unittest.TestCase):
         labels = torch.tensor([[0, 2, 0, 2]])
         inputs = (text, audio, visual, mask, qmask, [4])
         model.train()
-        student = model(*inputs)[4]
         loss, n = v11_training_consistency_loss(
-            model, inputs, student, labels, qmask.argmax(-1), mask.bool()
+            model, inputs, labels, qmask.argmax(-1), mask.bool()
         )
         self.assertEqual(n, 2)
         self.assertTrue(model.training)
@@ -111,9 +110,8 @@ class TestV11Consistency(unittest.TestCase):
         qmask = F.one_hot(torch.tensor([[0, 1, 0]]), num_classes=2).float()
         labels = torch.tensor([[0, 1, 2]])  # A changed
         inputs = (text, audio, visual, mask, qmask, [3])
-        prob = model(*inputs)[4]
         loss, n = v11_training_consistency_loss(
-            model, inputs, prob, labels, qmask.argmax(-1), mask.bool()
+            model, inputs, labels, qmask.argmax(-1), mask.bool()
         )
         self.assertEqual(n, 0)
         self.assertEqual(loss.item(), 0.0)
