@@ -14,6 +14,7 @@ import random
 from pathlib import Path
 
 import numpy as np
+from sklearn.metrics import accuracy_score, f1_score
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Subset
@@ -81,10 +82,41 @@ def train_one_epoch(model, loader, optimizer, device, max_batches=0):
     return total_loss / total_n, 100.0 * correct / total_n, total_n
 
 
+def history_bin_labels(speakers):
+    """Bin each utterance by prior same-speaker turns, without emotion labels."""
+    count = {}
+    bins = []
+    for speaker in speakers:
+        speaker = int(speaker)
+        previous = count.get(speaker, 0)
+        bins.append(str(previous) if previous < 3 else "3+")
+        count[speaker] = previous + 1
+    return bins
+
+
+def history_bin_metrics(y, pred, bins, n_classes):
+    y, pred = np.asarray(y), np.asarray(pred)
+    results = {}
+    for name in ("0", "1", "2", "3+"):
+        indices = np.asarray([i for i, x in enumerate(bins) if x == name])
+        if len(indices) == 0:
+            results[name] = {"n": 0, "accuracy": None, "weighted_f1": None}
+            continue
+        results[name] = {
+            "n": len(indices),
+            "accuracy": round(100 * accuracy_score(y[indices], pred[indices]), 2),
+            "weighted_f1": round(100 * f1_score(
+                y[indices], pred[indices],
+                labels=list(range(n_classes)), average="weighted", zero_division=0
+            ), 2),
+        }
+    return results
+
+
 @torch.no_grad()
 def evaluate(model, loader, device, n_classes=7):
     model.eval()
-    all_y, all_p, all_tags = [], [], []
+    all_y, all_p, all_tags, all_bins = [], [], [], []
     for batch in loader:
         text, visual, audio, qmask, umask, labels, _ = to_device(batch, device)
         logits = model(text, visual, audio, qmask, umask)
@@ -102,7 +134,11 @@ def evaluate(model, loader, device, n_classes=7):
             all_p.extend(p)
             # Gold labels are used ONLY AFTER model prediction.
             all_tags.extend(group_labels(y, sp))
+            all_bins.extend(history_bin_labels(sp))
     report = compute_report(all_y, all_p, all_tags, n_classes)
+    report["history_bins"] = history_bin_metrics(
+        all_y, all_p, all_bins, n_classes
+    )
     return report, len(all_y)
 
 
