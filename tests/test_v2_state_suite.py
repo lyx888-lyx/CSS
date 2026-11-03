@@ -3,6 +3,7 @@ import unittest
 
 from research.v2_state_model import MODES
 from scripts.summarize_v2_state_suite import validate_and_summarize
+from scripts.train_v2_state_probe import history_bin_labels, history_bin_metrics
 
 
 def sample_report(mode, score=50.0):
@@ -55,6 +56,18 @@ class TestV2SuiteComparison(unittest.TestCase):
         self.reports["adaptive"]["config"]["test_evaluated"] = True
         with self.assertRaisesRegex(ValueError, "official TEST"):
             validate_and_summarize(self.reports)
+
+    def test_prior_history_bins_are_label_free_and_partitioned(self):
+        speakers = [0, 1, 0, 0, 1, 0, 0]
+        bins = history_bin_labels(speakers)
+        self.assertEqual(bins, ["0", "0", "1", "2", "1", "3+", "3+"])
+        m = history_bin_metrics(
+            [0, 1, 0, 1, 1, 0, 1],
+            [0, 1, 0, 0, 1, 0, 0],
+            bins, 7
+        )
+        self.assertEqual(sum(v["n"] for v in m.values()), 7)
+        self.assertEqual(m["3+"]["n"], 2)
 
     def test_rejects_missing_arm(self):
         del self.reports["ema"]
