@@ -305,7 +305,7 @@ def main():
           f"{d.get('ung_admissible_components', 0)}/{n} "
           f"({100*d.get('ung_admissible_components', 0)/max(n,1):.2f}%)")
     print(f"GM raw clipped components: {d.get('ung_clipped_components', 0)}/{n}")
-    print(f"GM eligible validation utterances: {len(result['scores']['gm']) if False else result['eligible_validation_targets']}")
+    print(f"GM eligible validation utterances: {result['eligible_validation_targets']}")
     print("Warning: these are forecasts from local TEXT probability history, "
           "not CSS weighted F1, and not comparable to CSS 73.59%.")
     print(f"Saved: {args.output}")
