@@ -85,6 +85,8 @@ def get_IEMOCAP_loaders(batch_size=32, valid=0.1, num_workers=0, pin_memory=Fals
 def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimizer=None, train=False):
     losses, preds, labels, masks = [], [], [], []
     PGM_loss = PGM(loss_function, kl_loss)
+    v11_selected_total = 0
+    v11_kl_numerator = 0.0
 
     assert not train or optimizer != None
     if train:
@@ -152,6 +154,8 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
                 umask.bool(),
             )
             loss = loss + v11_weight * consistency
+            v11_selected_total += n_stable
+            v11_kl_numerator += consistency.detach().item() * n_stable
 
         all_prob = outputs[4]
         pred_ = torch.argmax(all_prob.view(-1, all_prob.size()[2]), 1)
@@ -189,6 +193,17 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
     avg_loss = round(np.sum(losses) / np.sum(masks), 4)
     avg_accuracy = round(accuracy_score(labels, preds, sample_weight=masks) * 100, 2)
     avg_fscore = round(f1_score(labels, preds, sample_weight=masks, average='weighted') * 100, 2)
+
+    if train and getattr(args, "v11_consistency_lambda", 0.0) > 0:
+        avg_kl = v11_kl_numerator / max(1, v11_selected_total)
+        print(
+            "V11_TRAIN_DIAG epoch={} stable_after_other_used={} "
+            "mean_consistency_kl={:.8f} lambda={:.4f}".format(
+                epoch + 1, v11_selected_total, avg_kl,
+                args.v11_consistency_lambda
+            ),
+            flush=True
+        )
 
     # plot_tsne(outputs[9], labels_)
     return avg_loss, avg_accuracy, labels, preds, masks, avg_fscore
