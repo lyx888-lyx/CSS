@@ -87,6 +87,7 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
     PGM_loss = PGM(loss_function, kl_loss)
     v11_selected_total = 0
     v11_kl_numerator = 0.0
+    v11_gradient_probed = False
 
     assert not train or optimizer != None
     if train:
@@ -153,6 +154,30 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
                 qmask.argmax(-1),
                 umask.bool(),
             )
+            if (n_stable > 0 and not v11_gradient_probed
+                    and getattr(args, "v11_probe_gradient", False)):
+                from research.v11_intervention import measure_auxiliary_gradient_ratio
+                other_weights = [
+                    block.other_diff.weight
+                    for block in model.precontext_shift.values()
+                ]
+                diagnostic = measure_auxiliary_gradient_ratio(
+                    loss, consistency, v11_weight, other_weights
+                )
+                print(
+                    "V11_GRAD_DIAG epoch={} "
+                    "pgm_grad_norm={:.8e} raw_kl_grad_norm={:.8e} "
+                    "weighted_kl_grad_norm={:.8e} "
+                    "weighted_to_pgm_grad_ratio={:.8e}".format(
+                        epoch + 1,
+                        diagnostic["pgm_grad_norm"],
+                        diagnostic["raw_kl_grad_norm"],
+                        diagnostic["weighted_kl_grad_norm"],
+                        diagnostic["weighted_to_pgm_grad_ratio"]
+                    ),
+                    flush=True
+                )
+                v11_gradient_probed = True
             loss = loss + v11_weight * consistency
             v11_selected_total += n_stable
             v11_kl_numerator += consistency.detach().item() * n_stable
