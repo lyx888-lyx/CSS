@@ -107,3 +107,49 @@ should any stronger originality or performance claim be considered.
 
 This architecture is a **controlled V1 pilot**, not a novelty assertion
 or a state-of-the-art result.
+
+## Step 3: Matched full 100-epoch validation pair (only after smoke test)
+
+The first smoke test completed successfully at epoch 1; its
+VALID weighted F1=32.80% is **not** an architecture-quality estimate.
+To compare the original CSS and V1 fairly, use the same new-protocol
+initialization/reset procedure for both models. Do **not** substitute
+the older, pre-RNG-reset CSS baseline checkpoint.
+
+Start the pair with one detached tmux session (sequential, same GPU):
+
+```bash
+cd /code/CSS
+git pull --ff-only origin experiment/v1-precontext-shift-probe
+python -m unittest discover -s tests -v
+tmux new-session -d -s css_v1_pair \
+ 'cd /code/CSS && bash scripts/run_v1_meld_pair.sh'
+tmux ls
+```
+
+Defaults: train seed 10068, validation split seed 10068,
+100 epochs for each model, 1037 train dialogues + 115 validation
+dialogues. This runs original CSS first, V1 precontext both second.
+No test-set evaluation is performed.
+
+After completion, regardless of whether the tmux session still exists:
+
+```bash
+cd /code/CSS
+R=$(cat results/v1_meld_pair_last_run.txt)
+cat "$R/status.txt"
+cat "$R/summary.txt"
+tail -n 10 "$R/css.log"
+tail -n 10 "$R/v1.log"
+```
+
+`summary.txt` and `summary.json` contain validation F1, accuracy,
+best epoch, paired delta and checkpoint locations. The summary also
+checks the exact same validation dialogue indices, split seed and
+training seed were used. `status.txt` reports RUNNING, FAILED or
+COMPLETE. Files live under a timestamped `results/v1_meld_pair/`
+directory and existing V0 / author-protocol checkpoints are preserved.
+
+Only after this matched first pair should we decide whether
+multi-seed, speaker-shift subgroup or modality-level ablation experiments
+are warranted.
