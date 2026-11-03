@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from research.precontext_shift import PreContextSpeakerShift
 from research.v11_intervention import (
     masked_categorical_kl,
+    measure_auxiliary_gradient_ratio,
     stable_after_other_training_mask,
     without_v1_other_residual,
     v11_training_consistency_loss,
@@ -101,6 +102,23 @@ class TestV11Consistency(unittest.TestCase):
             m.other_diff._forward_hooks
             for m in model.precontext_shift.values()
         ))
+
+    def test_gradient_diagnostic_does_not_modify_parameter_grads(self):
+        weight = nn.Parameter(torch.tensor([2.0]))
+        baseline = weight.square().sum()  # d/dw = 4
+        auxiliary = (weight * 3).sum()    # d/dw = 3
+        result = measure_auxiliary_gradient_ratio(
+            baseline, auxiliary, 0.5, [weight]
+        )
+        self.assertAlmostEqual(result["pgm_grad_norm"], 4.0)
+        self.assertAlmostEqual(result["raw_kl_grad_norm"], 3.0)
+        self.assertAlmostEqual(result["weighted_kl_grad_norm"], 1.5)
+        self.assertAlmostEqual(
+            result["weighted_to_pgm_grad_ratio"], 0.375
+        )
+        self.assertIsNone(weight.grad)
+        (baseline + 0.5 * auxiliary).backward()
+        self.assertAlmostEqual(weight.grad.item(), 5.5)
 
     def test_no_stable_return_skips_second_forward(self):
         torch.manual_seed(12)
