@@ -139,6 +139,21 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
             shared_params
         )
 
+        # V1.1 opt-in TRAIN-ONLY loss. Default 0 preserves the original
+        # CSS PGM objective and the author's original evaluation behavior.
+        v11_weight = getattr(args, "v11_consistency_lambda", 0.0)
+        if train and v11_weight > 0:
+            from research.v11_intervention import v11_training_consistency_loss
+            consistency, n_stable = v11_training_consistency_loss(
+                model,
+                (textf, visuf, acouf, umask, qmask, lengths),
+                outputs[4],
+                label,
+                qmask.argmax(-1),
+                umask.bool(),
+            )
+            loss = loss + v11_weight * consistency
+
         all_prob = outputs[4]
         pred_ = torch.argmax(all_prob.view(-1, all_prob.size()[2]), 1)
 
