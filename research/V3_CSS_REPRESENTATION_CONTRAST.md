@@ -139,3 +139,65 @@ If test fails or no improvement, do not stack additional SupCon
 gates or arbitrary weight searches; pivot to independent data
 quality/feature error analysis, not blind model complexity.
 No new dataset files or GPU training are performed by assistant.
+
+
+## 2026-11-04 user-run V3 outcome — NEGATIVE; STOP
+
+User completed the single fixed-coefficient CSS+SupCon pilot
+on 1037 TRAIN / 115 VALID MELD dialogues (split/seed 10068).
+Compared the validation-best checkpoint against the archived
+strict original CSS validation-best checkpoint. Official TEST
+was NOT evaluated.
+
+| Subgroup | Archived CSS W-F1 | V3 W-F1 | V3 - CSS pp |
+| --- | ---: | ---: | ---: |
+| all | 73.59 | 73.36 | **-0.23** |
+| first | not supplied | not supplied | +0.01 |
+| stable | 82.25 | 81.43 | **-0.82** |
+| changed | 63.69 | 63.70 | +0.01 |
+| stable_after_other | not supplied | not supplied | -0.85 |
+| changed_after_other | 64.42 | 64.41 | -0.01 |
+
+There is no substantive emotion-change gain and overall
+weighted F1 fell. The new checkpoint could have a different
+selected epoch and training maximum (new 60, original 100);
+these results do NOT prove all supervised contrastive learning
+is unhelpful, nor do they isolate the cause of lost stable F1.
+They DO fail the preregistered exploratory go/no-go criterion.
+
+**STOP:** Do not randomly sweep contrastive weights,
+temperatures, margin losses or add another gate on this same
+115-dialogue validation cohort. No SupCon branch merge
+into original CSS. Preserve code/checkpoints for audit.
+
+### Low-cost remaining diagnosis from saved JSON (no training)
+
+The comparison already contains per-class VALIDATION F1
+for both checkpoints. To see where representation learning
+hurt without reusing labels for training:
+
+```bash
+cd /code/CSS
+R=$(cat results/v3_css_supcon_pilot_last_run.txt)
+python - "$R/validation_comparison.json" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding='utf-8'))
+base, v3 = [m['scores']['per_class'] for m in data['models']]
+print('MELD class index   n      CSS F1      V3 F1    delta pp')
+for cls in sorted(base, key=int):
+    a, b = base[cls], v3[cls]
+    print(f"{cls:>10} {a['n']:>6} {a['f1']:>11.2f} "
+          f"{b['f1']:>11.2f} {b['f1']-a['f1']:>+11.2f}")
+print('Class IDs follow the MELD pickle label mapping; '
+      'verify before attaching emotion names.')
+PY
+```
+
+The next legitimate method design should be motivated by
+**which class confusions arise in the training distribution**
+and the original MELD feature-generation assumptions, then
+validated with fresh seeds or a truly independent held-out
+selection regime. The archived 115 dialogue VALID group has
+already been repeatedly inspected, causing exploratory
+selection risk. No further benchmark claim on this group
+without an independent confirmation.
