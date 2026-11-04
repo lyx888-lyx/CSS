@@ -85,6 +85,8 @@ def get_IEMOCAP_loaders(batch_size=32, valid=0.1, num_workers=0, pin_memory=Fals
 def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimizer=None, train=False):
     losses, preds, labels, masks = [], [], [], []
     PGM_loss = PGM(loss_function, kl_loss)
+    v3_eligible_anchors = 0
+    v3_weighted_scl = 0.0
 
     assert not train or optimizer != None
     if train:
@@ -99,7 +101,20 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
         textf, visuf, acouf, qmask, umask, label = [d.cuda() for d in data[:-1]] if cuda else data[:-1]
         qmask = qmask.permute(1, 0, 2)
         lengths = [(umask[j] == 1).nonzero().tolist()[-1][0] + 1 for j in range(len(umask))]
-        outputs = model(textf, visuf, acouf, umask, qmask, lengths)
+        v3_weight = getattr(args, "v3_supcon_weight", 0.0)
+        fused_captured = []
+        capture_handle = None
+        if train and v3_weight > 0:
+            # Capture the original CSS fusion representation with
+            # gradients, without altering model.forward or checkpoints.
+            capture_handle = model.last_gate.register_forward_hook(
+                lambda _module, _inputs, output: fused_captured.append(output)
+            )
+        try:
+            outputs = model(textf, visuf, acouf, umask, qmask, lengths)
+        finally:
+            if capture_handle is not None:
+                capture_handle.remove()
         labels_ = label.view(-1)
 
         shared_params = [
@@ -139,6 +154,18 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
             shared_params
         )
 
+        if train and v3_weight > 0:
+            from research.v3_contrastive import class_balanced_supcon
+            if len(fused_captured) != 1:
+                raise RuntimeError("CSS last_gate must produce exactly one fused representation")
+            scl, n_anchors = class_balanced_supcon(
+                fused_captured[0], label, umask.bool(),
+                temperature=getattr(args, "v3_supcon_temp", 0.2)
+            )
+            loss = loss + v3_weight * scl
+            v3_eligible_anchors += n_anchors
+            v3_weighted_scl += float(scl.detach().item()) * n_anchors
+
         all_prob = outputs[4]
         pred_ = torch.argmax(all_prob.view(-1, all_prob.size()[2]), 1)
 
@@ -176,6 +203,15 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
     avg_accuracy = round(accuracy_score(labels, preds, sample_weight=masks) * 100, 2)
     avg_fscore = round(f1_score(labels, preds, sample_weight=masks, average='weighted') * 100, 2)
 
+    if train and getattr(args, "v3_supcon_weight", 0.0) > 0:
+        print(
+            "V3_SCL_DIAG epoch={} eligible_anchors={} mean_scl={:.6f} weight={:.5f}".format(
+                epoch + 1, v3_eligible_anchors,
+                v3_weighted_scl / max(v3_eligible_anchors, 1),
+                args.v3_supcon_weight
+            ),
+            flush=True
+        )
     # plot_tsne(outputs[9], labels_)
     return avg_loss, avg_accuracy, labels, preds, masks, avg_fscore
 
