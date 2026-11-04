@@ -228,3 +228,80 @@ other inputs. This intervention is NOT a separately trained
 Only proceed with multi-seed/longer-training controls if evidence
 and the research question justify them; freeze V2 adaptive
 hypothesis if EMA continues to dominate.
+
+
+## Paired V2 validation diagnosis (2026-11-04) — NEGATIVE
+
+User ran `scripts/diagnose_v2_state_paths.py` on the SAME 1,044 VALID
+utterances across trained checkpoints; official TEST was untouched.
+
+| Variant | Overall weighted F1 | Stable | Changed | Changed-after-other |
+| --- | ---: | ---: | ---: | ---: |
+| current | 72.12 | 79.35 | 60.83 | 61.02 |
+| ema | **72.48** | **82.24** | **61.47** | **62.26** |
+| adaptive | 71.90 | 81.14 | 60.14 | 60.30 |
+| adaptive_other | 72.11 | 80.28 | 60.92 | 61.52 |
+| adaptive_other with other_projection output zeroed, inference only | 72.25 | 80.42 | 61.00 | 61.35 |
+
+Paired correctness migration on SAME 1044 utterances:
+
+| Pair (source -> target) | Wrong-to-correct | Correct-to-wrong | Net correct | Predicted labels changed |
+| --- | ---: | ---: | ---: | ---: |
+| current -> ema | 32 | 31 | +1 | 81 |
+| ema -> adaptive | 25 | 31 | -6 | 80 |
+| ema -> adaptive_other | 38 | 44 | -6 | 120 |
+| adaptive -> adaptive_other | 28 | 28 | 0 | 96 |
+| adaptive_other -> zero external projection | 6 | 5 | +1 | **16** |
+
+`adaptive_other` trained parameters:
+- Positive decay `softplus(raw_decay)=0.125943`.
+- Other gain `sigmoid(raw_other_gain)=0.143835`.
+- `other_projection.weight` Frobenius norm = 3.272761.
+
+Interpretation: the trained external history projection affected
+only 16/1044 (=1.53%) **argmax label decisions** in the zero-path
+inference probe. The remaining 1028 labels may still have changed
+probability distributions; this diagnostic does NOT measure
+distributional effect or all other-history information. In this
+probe, removing the external vector fixed 6, broke 5, and changed
+5 incorrect predictions to other incorrect labels. Since the
+external path can contribute through training and metadata remains,
+this is **not** the same as training an other-free architecture.
+
+The `adaptive` and `adaptive_other` separately trained-model
+comparison (net 0 correct, 96 changed labels) cannot isolate the
+causal contribution of external utterances. Despite last and
+adaptive_other selecting epoch 12 (potential training-budget
+limits), there is **no robust one-seed evidence** that this
+adaptive first-order speaker dynamic beats EMA or enhances
+emotion-shift recognition. EMA's weighted F1 advantage over
+current maps to only **one additional correctly classified
+utterance** at this seed. No reliable overall or change-specific
+improvement has been established.
+
+**Decision: STOP adding gates, history-difference terms, large
+lambda, or training a 100-epoch CSS+V2 model.** Keep EMA and
+current as cheap reference baselines, archive this independent V2
+probe as negative evidence, and reformulate the method problem
+before new experiments. If eventually rerunning, preregister
+training budget and 3+ seeds with checks on early/late best
+epochs. Do not present a single seed or inference-only path
+change as an architectural innovation.
+
+For additional *read-only* subgroup evidence already in the saved
+`paired_errors.json` (NO retraining):
+
+```bash
+cd /code/CSS
+R=$(cat results/v2_speaker_state_suite_last_run.txt)
+python - "$R/paired_errors.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+pair = "adaptive_other -> adaptive_other_zero_external_vector"
+print("After zeroing external projection (source = trained V2 full):")
+for g in ("all", "stable", "changed", "stable_after_other", "changed_after_other", "first"):
+    v = d["paired"][pair][g]
+    print(g, "n=", v["n"], "pred_changes=", v["predicted_label_changed"],
+          "fixed=", v["fixed"], "broken=", v["broken"])
+PY
+```
