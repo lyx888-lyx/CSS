@@ -305,3 +305,47 @@ for g in ("all", "stable", "changed", "stable_after_other", "changed_after_other
           "fixed=", v["fixed"], "broken=", v["broken"])
 PY
 ```
+
+
+## 2026-11-04 final same-checkpoint external-path subgroup analysis
+
+User ran the **read-only** `paired_errors.json` subgroup drilldown,
+in which the ALREADY TRAINED V2 `adaptive_other` model is compared to
+the SAME checkpoint with only `other_projection` forward output
+temporarily zeroed. `fixed` and `broken` refer to **zeroing** relative
+to the original full model:
+
+| VALID group | n | Argmax changed | Zeroing fixed | Zeroing broke | Net correct after zeroing |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| all | 1044 | 16 | 6 | 5 | +1 |
+| stable | 346 | 6 | 1 | 1 | 0 |
+| changed | 384 | 9 | 4 | 4 | 0 |
+| stable_after_other | 210 | 3 | 0 | 1 | -1 |
+| changed_after_other | 285 | 8 | 3 | 4 | -1 |
+| first speaker occurrence | 314 | 1 | 1 | 0 | +1 |
+
+The disjoint `first`, `stable`, `changed` groups total 1044
+utterances. `...after_other` groups are **nested** within stable
+or changed; do not add them to overall totals.
+
+After-other-changed projection intervention changed argmax decisions
+for only 8/285 (2.81%) and, on these samples, keeping the external
+projection resulted in just one more correct classification than
+zeroing it. This is **not** a repeatable or robust improvement.
+A first speaker occurrence may have preceding other-speaker turns,
+so one `first` change is consistent with the code's use of prior
+external context. The zeroing intervention leaves externally
+derived availability metadata and the trained classifier intact.
+Other 1028 examples could still have altered predicted probability
+vectors without changing argmax.
+
+**FINAL V2 GO/NO-GO:** NO-GO for the current V2 learned first-order
+speaker state plus aggregate external-history branch. EMA remains a
+cheap control, not an established innovation. No CSS integration
+or new 100-epoch training recommended. Preserve results, avoid
+hyperparameter tuning on the same 115-dialogue validation split,
+and reformulate the question as **selective, uncertainty-aware
+speaker-conditioned evidence with explicit dynamics and matched
+simple controls**, subject to 2026 publication overlap checks.
+No claim that human interpersonal emotion influence has been
+causally measured.
