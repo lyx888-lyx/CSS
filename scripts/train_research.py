@@ -124,6 +124,8 @@ def make_config(args):
         "speaker_mode": args.speaker_mode, "time_decay": not args.no_time_decay,
         "max_lag": args.max_lag,
         "precontext_mode": getattr(args, "precontext_mode", "off"),
+        "v3_supcon_weight": getattr(args, "v3_supcon_weight", 0.0),
+        "v3_supcon_temp": getattr(args, "v3_supcon_temp", 0.2),
     }
 
 
@@ -161,6 +163,10 @@ def main():
                    default="off")
     p.add_argument("--precontext-mode", choices=("off", "self", "other", "both"),
                    default="off", help="V1 experimental pre-context difference module")
+    p.add_argument("--v3-supcon-weight", type=float, default=0.0,
+                   help="Train-only class-balanced SupCon coefficient; zero is original CSS")
+    p.add_argument("--v3-supcon-temp", type=float, default=0.2,
+                   help="Supervised contrastive temperature (must be positive)")
     p.add_argument("--no-time-decay", action="store_true")
     p.add_argument("--max-lag", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
@@ -191,6 +197,14 @@ def main():
     if (config["speaker_mode"] != "off"
         and config.get("precontext_mode", "off") != "off"):
         p.error("V0 speaker-mode and V1 precontext-mode must not both be enabled")
+    if config["v3_supcon_weight"] < 0 or config["v3_supcon_temp"] <= 0:
+        p.error("V3 SupCon requires nonnegative weight and positive temperature")
+    if config["v3_supcon_weight"] > 0 and (
+        config["dataset"] != "MELD"
+        or config["speaker_mode"] != "off"
+        or config["precontext_mode"] != "off"
+    ):
+        p.error("V3 contrastive pilot currently supports original CSS MELD only")
 
     dataset = config["dataset"]
     trainer = importlib.import_module(
@@ -200,7 +214,11 @@ def main():
     use_cuda = torch.cuda.is_available() and not args.no_cuda
     trainer.cuda = use_cuda
     # Original train_or_eval_model uses args.tensorboard as a module-level variable.
-    trainer.args = argparse.Namespace(tensorboard=False)
+    trainer.args = argparse.Namespace(
+        tensorboard=False,
+        v3_supcon_weight=config.get("v3_supcon_weight", 0.0),
+        v3_supcon_temp=config.get("v3_supcon_temp", 0.2),
+    )
     device = torch.device("cuda" if use_cuda else "cpu")
 
     train_loader, valid_loader, test_loader, train_idx, valid_idx = get_loaders(
