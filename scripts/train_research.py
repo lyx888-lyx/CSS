@@ -55,6 +55,28 @@ def dialogue_split_indices(n_dialogues, ratio, split_seed):
     return train_indices, valid_indices
 
 
+def v52_disjoint_dialogue_split_indices(
+    n_dialogues, ratio, split_seed, legacy_seed=10068
+):
+    """Keep every previously inspected legacy VALID dialogue out of both sets.
+
+    With MELD's 1152 original train dialogues and ratio 0.1:
+    115 legacy VALID excluded, then 1037 eligible partitioned into
+    933 training / 104 clean validation dialogues.
+    """
+    legacy_train, legacy_valid = dialogue_split_indices(
+        n_dialogues, ratio, legacy_seed
+    )
+    local_train, local_valid = dialogue_split_indices(
+        len(legacy_train), ratio, split_seed
+    )
+    new_train = sorted(legacy_train[i] for i in local_train)
+    new_valid = sorted(legacy_train[i] for i in local_valid)
+    assert not (set(new_train) | set(new_valid)) & set(legacy_valid)
+    assert not set(new_train) & set(new_valid)
+    return new_train, new_valid, legacy_valid
+
+
 def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None,
                 v52_clean_split=False):
     if dataset == "IEMOCAP":
@@ -70,16 +92,11 @@ def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None,
         # conversations in new training or new model selection.
         # Both CSS control and V5.2 treatment use this exact same
         # disjoint subset of the original MELD TRAIN partition.
-        old_train, old_valid = dialogue_split_indices(
-            len(trainset), ratio, 10068
+        train_indices, valid_indices, _excluded = (
+            v52_disjoint_dialogue_split_indices(
+                len(trainset), ratio, split_seed
+            )
         )
-        new_tr_local, new_val_local = dialogue_split_indices(
-            len(old_train), ratio, split_seed
-        )
-        train_indices = sorted(old_train[i] for i in new_tr_local)
-        valid_indices = sorted(old_train[i] for i in new_val_local)
-        assert not (set(train_indices) | set(valid_indices)) & set(old_valid)
-        assert not set(train_indices) & set(valid_indices)
     else:
         train_indices, valid_indices = dialogue_split_indices(
             len(trainset), ratio, split_seed
