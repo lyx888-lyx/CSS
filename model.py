@@ -412,6 +412,9 @@ class SPFusion(nn.Module):
         self.output_dim = output_dim
         self.input_dim = input_dim
         self.poly_order = poly_order
+        # V6.1 controlled ablation switch. Default is ORIGINAL SPF.
+        # Non-parameter attribute; no state_dict or initialization changes.
+        self.ablation_mode = "full"
         self.weight_list_text = nn.ParameterList([
             nn.Parameter(torch.Tensor(input_dim, rank)) for _ in range(poly_order)
         ])
@@ -445,6 +448,12 @@ class SPFusion(nn.Module):
 
     def forward(self, t, a, v):
         x = torch.cat([t, a, v], dim=-1)  # [B, L, 3D]
+        if self.ablation_mode == "residual_only":
+            # V6.1 true retraining ablation: do NOT evaluate the
+            # high-order polynomial branch, including its bias.
+            return self.residual_proj(x)
+        if self.ablation_mode != "full":
+            raise ValueError("unknown SPF ablation mode: " + str(self.ablation_mode))
         B, L, D3 = x.shape
 
         out = 1
