@@ -183,3 +183,64 @@ same-seed/same-split controls; do NOT compare to original CSS
 The full `V8 group:` summary for all six groups, and
 selected epochs. If smoke fails, send first traceback and
 first error. No need to run any official TEST.
+
+
+## User-run V8 results — 2026-11-17: **NO-GO**
+
+Fixed protocol: MELD same 846 TRAIN / 87 previously viewed VALID
+dialogues (875 VALID utterances), seed10068, original CSS/PGM,
+fixed 100-epoch budget. The three newly-trained arms were compared
+against the two existing V6.1 same-seed matched baselines.
+
+| Arm | Overall W-F1 | Change-group W-F1 | Changed-after-other W-F1 | Best epoch |
+|---|---:|---:|---:|---:|
+| Original full CSS SPF | 76.14 | 66.79 | 70.88 | 87 |
+| Retrained residual-only | **76.43** | **67.85** | **71.86** | 84 |
+| Gain4 fixed x4 polynomial | 76.02 | 66.82 | 70.42 | 99 |
+| Current-only modality gate | 76.07 | 66.67 | 70.66 | 97 |
+| Prior-other-speaker modality gate | 75.96 | 66.70 | 70.67 | 97 |
+
+Other-speaker gate vs original full SPF:
+- Overall **-0.18 pp** (instead of required >=+1.00).
+- Changed **-0.09 pp**.
+- Changed-after-other **-0.21 pp**.
+
+Other-speaker vs simpler controls:
+- Current-only: **-0.11 pp** overall.
+- Fixed gain4: **-0.06 pp** overall.
+- Retrained residual-only: **-0.47 pp** overall,
+  Changed-after-other **-1.19 pp**.
+
+Other-group results: first 75.35% vs full 75.72%;
+stable unchanged 87.68%; stable-after-other unchanged 90.12%.
+There is no evidence of a benefit from this particular method
+of conditioning high-order feature strength on the most recent
+different-speaker modality evidence.
+
+All three new arms selected checkpoints at late epochs
+(97/99), but this cannot justify post-hoc training-budget or
+gain-factor sweeps on the exhausted validation cohort.
+Dataset split/seed and single pilot do NOT demonstrate
+cross-dataset or cross-seed superiority/inferiority.
+
+**Precommitted stop rule applies: NO-GO.**
+Do not try x2/x3/x5 gains, learnable scaling range changes,
+speaker/context gating tweaks, altered epochs, modified LR
+or repeated splits on the 87-dialogue VALID to chase a score.
+Preserve the negative result.
+
+**Updated research choice:** CSS's SPF has now been interrogated
+through frozen deletion (V6), fair retraining (V6.1),
+dialogue bootstrap (V6.2), class-logit attribution (V6.3),
+fixed three-seed retraining (V7) and controlled stronger/
+conditional high-order experiments (V8), without a credible
+gain beyond the original CSS. This is evidence against
+continuing incremental SPF scaling/gating, **NOT evidence**
+that cross-speaker information or high-order interactions
+are universally useless. For the user goal of actual
+MERC W-F1 improvement, next prioritize independently
+verified 2026 top-venue speaker/context-dynamics papers,
+ensure their code/data/checkpoint selection are reproducible,
+and use a stronger research-question-aligned baseline.
+Avoid official TEST during method search and avoid comparing
+heterogeneous feature/extraction and validation protocols.
