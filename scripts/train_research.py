@@ -187,6 +187,7 @@ def build_model(config):
             None if config.get("precontext_mode", "off") == "off"
             else config["precontext_mode"]
         ),
+        v8_spf_mode=config.get("v8_spf_mode", "off"),
     )
     model.last_gate.ablation_mode = config.get("v61_spf_mode", "full")
     if model.last_gate.ablation_mode not in ("full", "residual_only"):
@@ -216,6 +217,7 @@ def make_config(args):
         "v52_clean_split": getattr(args, "v52_clean_split", False),
         "v61_clean_split": getattr(args, "v61_clean_split", False),
         "v61_spf_mode": getattr(args, "v61_spf_mode", "full"),
+        "v8_spf_mode": getattr(args, "v8_spf_mode", "off"),
     }
 
 
@@ -280,6 +282,15 @@ def main():
             "V6 sampled TRAIN diagnostics out of the new VALID set"
         ),
     )
+    p.add_argument(
+        "--v8-spf-mode", choices=("off", "gain4", "current", "other"),
+        default="off",
+        help=(
+            "Fixed V8 MERC pilot: original CSS SPF, constant x4 high-order "
+            "contribution, or matched conditional gates with/without "
+            "preceding-other-speaker evidence"
+        ),
+    )
     p.add_argument("--no-time-decay", action="store_true")
     p.add_argument("--max-lag", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
@@ -312,6 +323,22 @@ def main():
         p.error("V0 speaker-mode and V1 precontext-mode must not both be enabled")
 
     dataset = config["dataset"]
+    if config.get("v8_spf_mode", "off") != "off":
+        if dataset != "MELD":
+            p.error("V8 pilot supports MELD only")
+        if not config.get("v61_clean_split", False):
+            p.error("V8 requires --v61-clean-split for matched cohort")
+        if config.get("v61_spf_mode", "full") != "full":
+            p.error("V8 requires original full SPF, not residual-only")
+        if config.get("v52_pgm_mode", "original") != "original":
+            p.error("V8 requires original PGM, not V5.2 modification")
+        if config.get("v52_clean_split", False):
+            p.error("V8 requires V6.1 split only")
+        if config.get("speaker_mode", "off") != "off" or \
+           config.get("precontext_mode", "off") != "off":
+            p.error("V8 forbids auxiliary V0/V1 experiments")
+        if int(config.get("split_seed", -1)) != 36427:
+            p.error("V8 fixes the MELD development split seed to 36427")
     if config.get("v61_clean_split", False):
         if dataset != "MELD":
             p.error("--v61-clean-split is supported on MELD only")
