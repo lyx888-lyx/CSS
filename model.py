@@ -674,9 +674,11 @@ class Transformer_Based_Model(nn.Module):
             if self.last_gate.ablation_mode != "full":
                 raise RuntimeError("V8 requires original full polynomial SPF")
             if self.v8_spf_mode == "gain4":
-                polynomial_scale = torch.full_like(
-                    u_mask.unsqueeze(-1), 4.0
-                )
+                polynomial_scale = torch.ones(
+                    (*t_transformer_out.shape[:2], 1),
+                    device=t_transformer_out.device,
+                    dtype=t_transformer_out.dtype,
+                ) * 4.0
             else:
                 polynomial_scale = self.v8_spf_gain(
                     *v8_gate_inputs, spk_idx, u_mask.bool()
