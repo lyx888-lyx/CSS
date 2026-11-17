@@ -50,9 +50,10 @@ def derive_direction_aligned_coefficients(grads, alpha, eps=1e-8):
             "one PGM task gradient is effectively zero; "
             "cannot define normalized target direction"
         )
-    normalized = [v / (n + eps) for v, n in zip(g, norms)]
-    raw = torch.stack(g, 0).mul(a[:, None]).sum(0)
-    unit = torch.stack(normalized, 0).mul(a[:, None]).sum(0)
+    # Avoid stacking the three very large task-gradient vectors,
+    # which unnecessarily increases peak GPU memory during training.
+    raw = sum((a[i] * g[i] for i in range(3)))
+    unit = sum((a[i] * g[i] / (norms[i] + eps) for i in range(3)))
     raw_norm = torch.linalg.vector_norm(raw)
     unit_norm = torch.linalg.vector_norm(unit)
     if (not bool(torch.isfinite(raw_norm).item())
