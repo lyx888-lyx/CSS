@@ -446,7 +446,7 @@ class SPFusion(nn.Module):
         self.residual_proj = nn.Linear(input_dim * 3, output_dim)
         self.eps = 1e-6
 
-    def forward(self, t, a, v):
+    def forward(self, t, a, v, polynomial_scale=None):
         x = torch.cat([t, a, v], dim=-1)  # [B, L, 3D]
         if self.ablation_mode == "residual_only":
             # V6.1 true retraining ablation: do NOT evaluate the
@@ -477,6 +477,10 @@ class SPFusion(nn.Module):
         fused = torch.matmul(out, self.output_proj) + self.output_bias  # [B, L, O]
 
         residual = self.residual_proj(x)  # [B, L, O]
+        if polynomial_scale is not None:
+            if polynomial_scale.shape != fused.shape[:2] + (1,):
+                raise ValueError("SPF polynomial_scale must be [B,L,1]")
+            fused = fused * polynomial_scale
         fused = fused + residual
 
         return fused
@@ -486,7 +490,8 @@ class Transformer_Based_Model(nn.Module):
     def __init__(self, dataset, temp, D_text, D_visual, D_audio, n_head,rank,poly_order,
                  n_classes, hidden_dim, n_speakers, dropout,
                  speaker_history_mode=None, speaker_history_decay=True,
-                 speaker_history_lag=None, precontext_shift_mode=None):
+                 speaker_history_lag=None, precontext_shift_mode=None,
+                 v8_spf_mode="off"):
         super(Transformer_Based_Model, self).__init__()
         self.temp = temp
         self.n_classes = n_classes
@@ -580,7 +585,16 @@ class Transformer_Based_Model(nn.Module):
         else:
             self.precontext_shift = None
 
-
+        # Appended AFTER all original CSS layers to preserve their
+        # seeded initial parameter values across all V8 arms.
+        if v8_spf_mode not in ("off", "gain4", "current", "other"):
+            raise ValueError("invalid v8_spf_mode")
+        self.v8_spf_mode = v8_spf_mode
+        if v8_spf_mode in ("current", "other"):
+            from research.conditional_spf_gain import CrossSpeakerSPFGain
+            self.v8_spf_gain = CrossSpeakerSPFGain(v8_spf_mode)
+        else:
+            self.v8_spf_gain = None
 
     def forward(self, textf, visuf, acouf, u_mask, qmask, dia_len):
         spk_idx = torch.argmax(qmask, -1)
@@ -609,6 +623,12 @@ class Transformer_Based_Model(nn.Module):
             gate_vision = torch.sigmoid(self.bias_gate_vision(text_bias))
             visuf = (1 - gate_vision) * visuf + gate_vision * (visuf + proj_vision_bias)
 
+
+        # V8 gate intentionally uses PRE-CONTEXT projections to compute
+        # its current and preceding-other-speaker features. The original
+        # CSS contextual Transformer may still attend bidirectionally.
+        if self.v8_spf_mode in ("current", "other"):
+            v8_gate_inputs = (textf, acouf, visuf)
 
         # V1 uses only modality-projected representations *before* any
         # full-dialogue contextual attention. No true emotion labels are used.
@@ -646,7 +666,25 @@ class Transformer_Based_Model(nn.Module):
             torch.cat([v_v_transformer_out,v_transformer_out], dim=-1))
 
 
-        all_transformer_out = self.last_gate(t_transformer_out, a_transformer_out, v_transformer_out)
+        if self.v8_spf_mode == "off":
+            all_transformer_out = self.last_gate(
+                t_transformer_out, a_transformer_out, v_transformer_out
+            )
+        else:
+            if self.last_gate.ablation_mode != "full":
+                raise RuntimeError("V8 requires original full polynomial SPF")
+            if self.v8_spf_mode == "gain4":
+                polynomial_scale = torch.full_like(
+                    u_mask.unsqueeze(-1), 4.0
+                )
+            else:
+                polynomial_scale = self.v8_spf_gain(
+                    *v8_gate_inputs, spk_idx, u_mask.bool()
+                )
+            all_transformer_out = self.last_gate(
+                t_transformer_out, a_transformer_out, v_transformer_out,
+                polynomial_scale=polynomial_scale
+            )
         if self.speaker_history is not None:
             all_transformer_out = self.speaker_history(
                 all_transformer_out, spk_idx, u_mask.bool()
