@@ -12,7 +12,7 @@ From user's V6.1 paired FROM-SCRATCH retraining:
 - MELD with 846 TRAIN / 87 clean new VALID and 100 epochs, seed10068.
 - Original full SPF 76.14 vs residual-only 76.43 overall W-F1.
 - 87 validation dialogues / 875 utterances; paired corrections 4,
-  new mistakes 2 (6/875 predictions differ).
+  new mistakes 2 (**six correctness-state changes**; the total number\n  of distinct class-label predictions may be larger if both models\n  are wrong but choose different wrong classes).
 - Changed W-F1 66.79 vs 67.85.
 
 From user's V6.2 paired WHOLE-DIALOGUE bootstrap (1500 reps):
