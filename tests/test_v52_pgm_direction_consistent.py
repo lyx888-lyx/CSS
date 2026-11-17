@@ -74,13 +74,16 @@ class TestV52PGMDirectionAlignment(unittest.TestCase):
             torch.tensor([0., 1., 1.])
         ]
         a = torch.tensor([.3, .3, .4])
-        _, first = derive_direction_aligned_coefficients(grads, a)
+        coeff_a, first = derive_direction_aligned_coefficients(grads, a)
         doubled = [grads[0], 4*grads[1], grads[2]]
-        _, second = derive_direction_aligned_coefficients(doubled, a)
-        self.assertAlmostEqual(
-            first["direction_angle_deg"],
-            second["direction_angle_deg"],
-            delta=70 # raw-update angle can change; bounded sanity
+        coeff_b, second = derive_direction_aligned_coefficients(doubled, a)
+        update_a = sum(c*g for c, g in zip(coeff_a, grads))
+        update_b = sum(c*g for c, g in zip(coeff_b, doubled))
+        # The global matching scale changes, but the direction
+        # depends only on alpha and the three UNIT task gradients.
+        torch.testing.assert_close(
+            update_a / update_a.norm(), update_b / update_b.norm(),
+            rtol=1e-6, atol=1e-6
         )
         self.assertGreater(
             second["original_task_gradient_norms"][1],
