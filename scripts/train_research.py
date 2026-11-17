@@ -55,7 +55,8 @@ def dialogue_split_indices(n_dialogues, ratio, split_seed):
     return train_indices, valid_indices
 
 
-def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None):
+def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None,
+                v52_clean_split=False):
     if dataset == "IEMOCAP":
         trainset = IEMOCAPDataset()
         testset = IEMOCAPDataset(train=False)
@@ -64,9 +65,25 @@ def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None):
         trainset = MELDDataset(path, train=True)
         testset = MELDDataset(path, train=False)
 
-    train_indices, valid_indices = dialogue_split_indices(
-        len(trainset), ratio, split_seed
-    )
+    if v52_clean_split:
+        # Prevent using ANY previously inspected 115-dialogue VALID
+        # conversations in new training or new model selection.
+        # Both CSS control and V5.2 treatment use this exact same
+        # disjoint subset of the original MELD TRAIN partition.
+        old_train, old_valid = dialogue_split_indices(
+            len(trainset), ratio, 10068
+        )
+        new_tr_local, new_val_local = dialogue_split_indices(
+            len(old_train), ratio, split_seed
+        )
+        train_indices = sorted(old_train[i] for i in new_tr_local)
+        valid_indices = sorted(old_train[i] for i in new_val_local)
+        assert not (set(train_indices) | set(valid_indices)) & set(old_valid)
+        assert not set(train_indices) & set(valid_indices)
+    else:
+        train_indices, valid_indices = dialogue_split_indices(
+            len(trainset), ratio, split_seed
+        )
     # Shuffle training dialogues independently of the validation split.
     # If train_seed is omitted, retain legacy shuffle seed behavior.
     shuffle_seed = split_seed if train_seed is None else train_seed
@@ -125,6 +142,7 @@ def make_config(args):
         "max_lag": args.max_lag,
         "precontext_mode": getattr(args, "precontext_mode", "off"),
         "v52_pgm_mode": getattr(args, "v52_pgm_mode", "original"),
+        "v52_clean_split": getattr(args, "v52_clean_split", False),
     }
 
 
@@ -171,6 +189,13 @@ def main():
             "matched original shared-gradient norm"
         ),
     )
+    p.add_argument(
+        "--v52-clean-split", action="store_true",
+        help=(
+            "V5.2 MELD: exclude ALL previously inspected 115 original VALID "
+            "dialogues; resplit only the other 1037 TRAIN dialogues"
+        ),
+    )
     p.add_argument("--no-time-decay", action="store_true")
     p.add_argument("--max-lag", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
@@ -203,6 +228,8 @@ def main():
         p.error("V0 speaker-mode and V1 precontext-mode must not both be enabled")
 
     dataset = config["dataset"]
+    if config.get("v52_clean_split", False) and dataset != "MELD":
+        p.error("--v52-clean-split is currently supported only on MELD")
     if (config.get("v52_pgm_mode", "original") != "original"
             and dataset != "MELD"):
         p.error("V5.2 direction_aligned is supported on MELD only")
@@ -224,7 +251,8 @@ def main():
 
     train_loader, valid_loader, test_loader, train_idx, valid_idx = get_loaders(
         dataset, config["batch_size"], config["valid_ratio"],
-        config.get("split_seed", config["seed"]), train_seed=config["seed"]
+        config.get("split_seed", config["seed"]), train_seed=config["seed"],
+        v52_clean_split=config.get("v52_clean_split", False)
     )
     model = build_model(config).to(device)
     if checkpoint is None:
