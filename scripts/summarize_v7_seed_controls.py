@@ -116,7 +116,7 @@ def main():
             "validation_dialogues": 87,
             "validation_utterances": 875,
             "already_inspected_validation": True,
-            "test_accessed": False,
+            "official_test_inference_or_scoring": False,
             "purpose": (
                 "Estimate variation across three matched training "
                 "random seeds on fixed and previously inspected "
