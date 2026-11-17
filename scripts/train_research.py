@@ -77,8 +77,53 @@ def v52_disjoint_dialogue_split_indices(
     return new_train, new_valid, legacy_valid
 
 
+def v61_disjoint_spf_ablation_split_indices(
+    n_dialogues, ratio, split_seed,
+    legacy_seed=10068, v52_seed=24117, v6_sample_seed=73117
+):
+    """Reserve all previously inspected VALID conversations and V6 probes.
+
+    Exact MELD protocol:
+    115 older VALID and 104 V5.2 VALID are excluded entirely;
+    65 distinct V6 diagnostic TRAIN dialogues are allowed ONLY in TRAIN.
+    Split the other 868 previously uninspected dialogues into
+    781 training and 87 new validation (then add 65 back to training):
+    846 TRAIN / 87 new VALID, no previously inspected VALID utterances
+    are used for training or selection, no V6 diagnostic utterances
+    are eligible for the new VALID cohort.
+
+    The V6 full probe used numpy choice(size=64, seed=73117) and its
+    smoke used choice(size=2, seed=73117). Because sample size affects
+    numpy.random.choice, their union is required.
+    """
+    v52_train, v52_valid, legacy_valid = v52_disjoint_dialogue_split_indices(
+        n_dialogues, ratio, v52_seed, legacy_seed=legacy_seed
+    )
+    rng_full = np.random.default_rng(v6_sample_seed)
+    rng_smoke = np.random.default_rng(v6_sample_seed)
+    seen_full = rng_full.choice(v52_train, size=min(len(v52_train), 64),
+                                replace=False).astype(int).tolist()
+    seen_smoke = rng_smoke.choice(v52_train, size=min(len(v52_train), 2),
+                                  replace=False).astype(int).tolist()
+    seen = sorted(set(seen_full) | set(seen_smoke))
+    eligible = sorted(set(v52_train) - set(seen))
+    local_train, local_valid = dialogue_split_indices(
+        len(eligible), ratio, split_seed
+    )
+    new_train = sorted([eligible[i] for i in local_train] + seen)
+    new_valid = sorted(eligible[i] for i in local_valid)
+    assert not (set(new_train) | set(new_valid)) & (
+        set(v52_valid) | set(legacy_valid)
+    )
+    assert not set(new_valid) & set(seen)
+    assert not set(new_train) & set(new_valid)
+    if len(set(new_train + new_valid + v52_valid + legacy_valid)) != n_dialogues:
+        raise RuntimeError("V6.1 dialogue split does not cover original TRAIN IDs")
+    return new_train, new_valid, legacy_valid, v52_valid, seen
+
+
 def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None,
-                v52_clean_split=False):
+                v52_clean_split=False, v61_clean_split=False):
     if dataset == "IEMOCAP":
         trainset = IEMOCAPDataset()
         testset = IEMOCAPDataset(train=False)
@@ -87,7 +132,13 @@ def get_loaders(dataset, batch_size, ratio, split_seed, train_seed=None,
         trainset = MELDDataset(path, train=True)
         testset = MELDDataset(path, train=False)
 
-    if v52_clean_split:
+    if v61_clean_split:
+        train_indices, valid_indices, _, _, _ = (
+            v61_disjoint_spf_ablation_split_indices(
+                len(trainset), ratio, split_seed
+            )
+        )
+    elif v52_clean_split:
         # Prevent using ANY previously inspected 115-dialogue VALID
         # conversations in new training or new model selection.
         # Both CSS control and V5.2 treatment use this exact same
@@ -137,6 +188,9 @@ def build_model(config):
             else config["precontext_mode"]
         ),
     )
+    model.last_gate.ablation_mode = config.get("v61_spf_mode", "full")
+    if model.last_gate.ablation_mode not in ("full", "residual_only"):
+        raise ValueError("invalid v61_spf_mode")
     return model
 
 
@@ -160,6 +214,8 @@ def make_config(args):
         "precontext_mode": getattr(args, "precontext_mode", "off"),
         "v52_pgm_mode": getattr(args, "v52_pgm_mode", "original"),
         "v52_clean_split": getattr(args, "v52_clean_split", False),
+        "v61_clean_split": getattr(args, "v61_clean_split", False),
+        "v61_spf_mode": getattr(args, "v61_spf_mode", "full"),
     }
 
 
@@ -213,6 +269,17 @@ def main():
             "dialogues; resplit only the other 1037 TRAIN dialogues"
         ),
     )
+    p.add_argument(
+        "--v61-spf-mode", choices=("full", "residual_only"), default="full",
+        help="V6.1 full original SPF vs retrained residual-only SPF",
+    )
+    p.add_argument(
+        "--v61-clean-split", action="store_true",
+        help=(
+            "V6.1 MELD: exclude both old validation cohorts and keep "
+            "V6 sampled TRAIN diagnostics out of the new VALID set"
+        ),
+    )
     p.add_argument("--no-time-decay", action="store_true")
     p.add_argument("--max-lag", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
@@ -245,6 +312,18 @@ def main():
         p.error("V0 speaker-mode and V1 precontext-mode must not both be enabled")
 
     dataset = config["dataset"]
+    if config.get("v61_clean_split", False):
+        if dataset != "MELD":
+            p.error("--v61-clean-split is supported on MELD only")
+        if config.get("v52_clean_split", False):
+            p.error("--v52-clean-split and --v61-clean-split are exclusive")
+        if config.get("v52_pgm_mode", "original") != "original":
+            p.error("V6.1 cannot combine with V5.2 gradient modification")
+        if (config["speaker_mode"] != "off"
+                or config.get("precontext_mode", "off") != "off"):
+            p.error("V6.1 requires strict CSS architecture")
+    elif config.get("v61_spf_mode", "full") != "full":
+        p.error("V6.1 residual-only retraining requires --v61-clean-split")
     if config.get("v52_clean_split", False) and dataset != "MELD":
         p.error("--v52-clean-split is currently supported only on MELD")
     if (config.get("v52_pgm_mode", "original") != "original"
@@ -269,7 +348,8 @@ def main():
     train_loader, valid_loader, test_loader, train_idx, valid_idx = get_loaders(
         dataset, config["batch_size"], config["valid_ratio"],
         config.get("split_seed", config["seed"]), train_seed=config["seed"],
-        v52_clean_split=config.get("v52_clean_split", False)
+        v52_clean_split=config.get("v52_clean_split", False),
+        v61_clean_split=config.get("v61_clean_split", False)
     )
     model = build_model(config).to(device)
     if checkpoint is None:
