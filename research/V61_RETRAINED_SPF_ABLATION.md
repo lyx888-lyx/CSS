@@ -163,3 +163,44 @@ weighted-F1 for all, stable, changed and after-other.
   multi-seed + IEMOCAP/MELD replication are needed.
 
 No assistant-side GPU training or unit tests have been run.
+
+
+## Actual user-run V6.1 result (2026-11-17) — registered, inconclusive
+
+One matched MELD experiment finished: train seed10068,
+split seed36427, 846 TRAIN/87 untouched new VALID dialogues,
+875 validation utterances; full original SPF and retrained
+residual-only each had a 100-epoch maximum training budget.
+No official TEST used.
+
+| Subgroup | N utterances | Full SPF W-F1 | Retrained residual-only W-F1 | Delta (residual-full) pp |
+|---|---:|---:|---:|---:|
+| all | 875 | 76.14 | **76.43** | **+0.29** |
+| first | 242 | **75.72** | 75.31 | -0.41 |
+| stable | 291 | 87.68 | 87.68 | 0.00 |
+| changed | 342 | 66.79 | **67.85** | +1.06 |
+| stable_after_other | 196 | 90.12 | **90.65** | +0.53 |
+| changed_after_other | 273 | 70.88 | **71.86** | +0.98 |
+
+Selected checkpoint epochs: full SPF 87, residual-only 84.
+Output: `results/v61_spf_paired_split36427_trainseed10068/paired_validation.json`.
+
+**Interpretation:** On this one split/seed, retrained full SPF did
+not outperform a simpler residual-only fusion model. The +0.29 pp
+W-F1 difference is too small to establish equivalence, inferiority
+or statistical significance. V6's 668/668 unchanged argmax on
+TRAIN under frozen-head polynomial removal supports the *hypothesis*
+of limited marginal decision impact, but does not prove that the
+high-order branch fails to contribute during training or elsewhere.
+The new 87-dialogue VALID cohort is now already inspected; do not
+use it to tune fusion mechanisms or choose hyperparameters.
+
+**Next descriptive gate:** Obtain paired dialogue-level per-utterance
+predictions for BOTH saved checkpoints on the SAME 87 dialogues,
+calculate fixed/broken predictions and dialogue-cluster bootstrap
+intervals for subgroup W-F1 differences. This is descriptive inference,
+not new model selection. If the intervals overlap zero broadly,
+no further architecture search should be justified on this cohort.
+To establish a universal high-order redundancy claim requires
+predefined independent training seeds / data splits, capacity/compute
+controls, and IEMOCAP evaluation with TEST reserved for final use.
