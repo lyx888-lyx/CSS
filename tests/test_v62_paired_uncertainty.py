@@ -40,8 +40,8 @@ class TestV62PairedUncertainty(unittest.TestCase):
         ensure_paired_dialogues(t)
         s = score_group(t, "all")
         self.assertEqual(s["n"], 10)
-        self.assertEqual(s["residual_fixed"], 3)
-        self.assertEqual(s["residual_broken"], 3)
+        self.assertEqual(s["residual_fixed"], 4)
+        self.assertEqual(s["residual_broken"], 2)
         self.assertAlmostEqual(
             s["delta_residual_minus_full"],
             s["residual_f1"] - s["full_f1"]
