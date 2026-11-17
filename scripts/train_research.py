@@ -124,6 +124,7 @@ def make_config(args):
         "speaker_mode": args.speaker_mode, "time_decay": not args.no_time_decay,
         "max_lag": args.max_lag,
         "precontext_mode": getattr(args, "precontext_mode", "off"),
+        "v52_pgm_mode": getattr(args, "v52_pgm_mode", "original"),
     }
 
 
@@ -161,6 +162,15 @@ def main():
                    default="off")
     p.add_argument("--precontext-mode", choices=("off", "self", "other", "both"),
                    default="off", help="V1 experimental pre-context difference module")
+    p.add_argument(
+        "--v52-pgm-mode", choices=("original", "direction_aligned"),
+        default="original",
+        help=(
+            "V5.2 MELD-only paired control: original CSS PGM or "
+            "normalized-target direction-aligned gradients with "
+            "matched original shared-gradient norm"
+        ),
+    )
     p.add_argument("--no-time-decay", action="store_true")
     p.add_argument("--max-lag", type=int, default=None)
     p.add_argument("--run-name", type=str, default=None)
@@ -193,6 +203,13 @@ def main():
         p.error("V0 speaker-mode and V1 precontext-mode must not both be enabled")
 
     dataset = config["dataset"]
+    if (config.get("v52_pgm_mode", "original") != "original"
+            and dataset != "MELD"):
+        p.error("V5.2 direction_aligned is supported on MELD only")
+    if (config.get("v52_pgm_mode", "original") != "original"
+            and (config["speaker_mode"] != "off"
+                 or config.get("precontext_mode", "off") != "off")):
+        p.error("V5.2 requires strict original CSS architecture")
     trainer = importlib.import_module(
         "train_IEMOCAP" if dataset == "IEMOCAP" else "train_MELD"
     )
@@ -200,7 +217,9 @@ def main():
     use_cuda = torch.cuda.is_available() and not args.no_cuda
     trainer.cuda = use_cuda
     # Original train_or_eval_model uses args.tensorboard as a module-level variable.
-    trainer.args = argparse.Namespace(tensorboard=False)
+    trainer.args = argparse.Namespace(
+        tensorboard=False, v52_pgm_mode=config.get("v52_pgm_mode", "original")
+    )
     device = torch.device("cuda" if use_cuda else "cpu")
 
     train_loader, valid_loader, test_loader, train_idx, valid_idx = get_loaders(
