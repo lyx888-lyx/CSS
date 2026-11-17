@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from dataloader import IEMOCAPDataset, MELDDataset
 from model import MaskedNLLLoss, MaskedKLDivLoss, Transformer_Based_Model, PGM
+from research.pgm_direction_consistent import DirectionAlignedPGM
 from sklearn.metrics import f1_score, confusion_matrix, accuracy_score, classification_report
 import pickle as pk
 import datetime
@@ -84,7 +85,16 @@ def get_IEMOCAP_loaders(batch_size=32, valid=0.1, num_workers=0, pin_memory=Fals
 
 def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimizer=None, train=False):
     losses, preds, labels, masks = [], [], [], []
-    PGM_loss = PGM(loss_function, kl_loss)
+    # Opt-in V5.2, original code path remains byte-equivalent by default.
+    v52_mode = getattr(args, "v52_pgm_mode", "original")
+    if v52_mode not in ("original", "direction_aligned"):
+        raise ValueError(f"unknown V5.2 PGM mode: {v52_mode}")
+    PGM_loss = (
+        DirectionAlignedPGM(loss_function, kl_loss)
+        if train and v52_mode == "direction_aligned"
+        else PGM(loss_function, kl_loss)
+    )
+    v52_angles, v52_norms, v52_scales, v52_coefficients = [], [], [], []
 
     assert not train or optimizer != None
     if train:
@@ -139,6 +149,13 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
             shared_params
         )
 
+        if train and v52_mode == "direction_aligned":
+            diag = PGM_loss.last_diagnostics
+            v52_angles.append(diag["direction_angle_deg"])
+            v52_norms.append(diag["raw_shared_gradient_norm"])
+            v52_scales.append(diag["matching_scale"])
+            v52_coefficients.append(diag["effective_loss_coefficients"])
+
         all_prob = outputs[4]
         pred_ = torch.argmax(all_prob.view(-1, all_prob.size()[2]), 1)
 
@@ -164,6 +181,19 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
 
             optimizer.step()
 
+
+    if train and v52_angles:
+        coeff_mean = np.mean(v52_coefficients, axis=0)
+        print(
+            f"V52_DIRECTION_DIAG epoch={epoch+1} mode={v52_mode} "
+            f"batches={len(v52_angles)} "
+            f"mean_source_angle_deg={np.mean(v52_angles):.2f} "
+            f"mean_raw_shared_grad_norm={np.mean(v52_norms):.4f} "
+            f"mean_norm_matching_scale={np.mean(v52_scales):.4f} "
+            f"mean_effective_coefficients="
+            f"[{coeff_mean[0]:.4f},{coeff_mean[1]:.4f},{coeff_mean[2]:.4f}]",
+            flush=True
+        )
 
     if preds != []:
         preds = np.concatenate(preds)
