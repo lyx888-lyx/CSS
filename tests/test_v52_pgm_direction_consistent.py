@@ -62,7 +62,8 @@ class TestV52PGMDirectionAlignment(unittest.TestCase):
         alpha = torch.tensor([0.3, 0.4, 0.3])
         coeff, diag = derive_direction_aligned_coefficients(grads, alpha)
         torch.testing.assert_close(coeff, alpha, rtol=1e-5, atol=1e-6)
-        self.assertAlmostEqual(diag["direction_angle_deg"], 0.0, places=4)
+        # Float32 cosine/acos near 1 may show ~0.02 degree noise.
+        self.assertLess(diag["direction_angle_deg"], 0.05)
 
     def test_scale_invariance_of_task_gradient(self):
         # Doubling a task loss multiplies its raw norm and changes the
