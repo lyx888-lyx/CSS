@@ -177,3 +177,49 @@ and a falsifiable expected advantage.
   versioned research log.
 - No assistant-side code execution with the server
   GPU; scripts and claims require user run.
+
+
+## 2026-11-17 — User-run V7 fixed three-seed result (LOCKED)
+
+Train/validation: MELD 846 TRAIN / 87 already-inspected VALID,
+100 original epochs, identical CSS features/PGM and matched
+full-SPF-vs-residual arms. TRAIN seeds **10068, 21431, 31907**.
+The first seed is from V6.1; the other two were locked before
+being run. All results are **residual-only minus full SPF W-F1**:
+
+| Group | seed10068 | seed21431 | seed31907 | Mean delta pp | SD (seed) | Positive |
+|---|---:|---:|---:|---:|---:|---:|
+| all | +0.29 | +0.11 | +0.13 | **+0.18** | 0.10 | 3/3 |
+| first | -0.41 | +0.41 | -0.84 | -0.28 | 0.64 | 1/3 |
+| stable | +0.00 | -0.45 | +0.36 | -0.03 | 0.41 | 1/3 |
+| changed | +1.06 | +0.39 | +0.66 | **+0.70** | 0.34 | 3/3 |
+| stable_after_other | +0.53 | +0.25 | +0.53 | +0.44 | 0.16 | 3/3 |
+| changed_after_other | +0.98 | +0.82 | +1.17 | **+0.99** | 0.18 | 3/3 |
+
+Source path: `results/v7_three_seed_spf_summary.json`
+and matched per-seed `paired_validation.json` reports.
+
+**Interpretation:**
+- Full-SPF's incremental performance benefit beyond a retrained
+  linear residual is NOT apparent in these three seed pairs.
+- The *sign* of the slight residual-only overall gain is
+  consistent, but the mean +0.18pp is small and cannot establish
+  a universal no-benefit claim, especially on one previously
+  viewed validation subset and with no independent split.
+- The changed-after-other +0.99pp difference is a prioritization
+  clue, NOT evidence that a mechanism really measures another
+  speaker's emotional impact; labels are post-prediction only.
+- No new method was tested, and the V7 run does NOT fulfill our
+  self-chosen target of +1.0pp mean **over the original CSS**
+  on matched protocol.
+
+**Gate decision:** enough evidence to justify ONE prespecified
+METHOD pilot with proper controls, not enough to claim that
+"high-order feature is useless" or to choose a method by
+tuning the same 87 VALID dialogues repeatedly.
+The proposed next pilot V8 is a *fixed hypothesis test*
+against original full-SPF, residual-only, fixed gain x4,
+and matched conditional gates, with train seed10068 and
+same fixed development cohort. Its outcomes are exploratory;
+a genuine improvement must be confirmed with independent
+datasets/splits and multiple seeds.
