@@ -191,3 +191,57 @@ must NOT be used as the control in this V5.2 experiment.
 
 No assistant-side GPU training was run. All model performance
 claims must originate from user-run logs.
+
+
+## User-run V5.2 result — fixed protocol, **NO-GO** (2026-11-17)
+
+The user ran the full paired 60-epoch MELD pilot on the preregistered
+new disjoint validation cohort (933 new TRAIN / 104 NEW VALID;
+115 repeatedly inspected OLD VALID excluded from both arms).
+Both arms used train seed10068, split seed24117, and did not touch TEST.
+
+| Group | Original CSS W-F1 % | Direction-aligned PGM W-F1 % | Difference pp |
+|---|---:|---:|---:|
+| all | **71.33** | 68.39 | **-2.94** |
+| first | 75.37 | 74.49 | -0.88 |
+| stable | 80.12 | 79.41 | -0.71 |
+| changed | **62.15** | 56.52 | **-5.63** |
+| stable_after_other | 80.09 | 78.68 | -1.41 |
+| changed_after_other | **64.58** | 59.07 | **-5.51** |
+
+Best epoch (within fixed 60-epoch budget): original 58,
+experimental direction-aligned 54.
+User run output location:
+`results/v52_pgm_paired_split24117_trainseed10068/`.
+
+**Decision:** STOP V5.2 direct normalized-direction loss correction.
+Do not sweep loss scales, gradient-normalization coefficients,
+temperature, training seeds or splits *based on this new validation
+cohort* to look for a positive result. Keep the negative finding.
+
+**Precisely what is and is not established:**
+- V5.1 established a reproducible ~38.42° mismatch between the
+  normalized PGM target direction and original raw-weighted gradient,
+  in 8 sampled TRAIN batches for one fixed checkpoint.
+- This V5.2 paired pilot offers **no support** for the hypothesis
+  that forcing direction agreement improves MERC on this MELD setup;
+  the opposite was observed (-2.94 pp overall).
+- The 5.63 pp decline for changed turns is descriptive. It does
+  **not** prove particular cross-speaker interactions were harmed;
+  `changed` labels are determined only for retrospective reporting.
+- This experiment changes loss coefficients over **all** parameters,
+  and matches gradient *norms only in PGM-selected shared parameters*.
+  It does NOT hold SPF or classification-head gradient norms fixed,
+  and Adam's adaptive steps also differ. Thus results **cannot
+  causally isolate** a direction-only effect across the full network.
+- 1 training seed, 1 fresh validation split, no confidence intervals
+  or cross-dataset replication: the negative result is local, not a
+  universal theorem about normalized gradients.
+
+**Next research choice:** return to CSS's original high-order
+multimodal representation rationale (SPF) and speaker/context
+error diagnostics. A new lightweight **read-only TRAIN-only**
+SPF contribution audit (polynomial component vs residual and
+per-order gate behavior) is a better next gate than adding
+another loss without causal evidence. Any new method must be
+connected to a concrete original-CSS limitation.
