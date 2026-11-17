@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.."
 PY="${CSS_PYTHON:-python}"
 SPLIT_SEED=24117
 TRAIN_SEED=10068
+# CRITICAL: the previously inspected 115 VALID dialogues (seed 10068)
+# are excluded from both training and checkpoint selection in BOTH arms.
 EPOCHS=60
 R="results/v52_pgm_paired_split${SPLIT_SEED}_trainseed${TRAIN_SEED}"
 
@@ -22,6 +24,7 @@ if [[ -e "${R}/checkpoints/v52_original_valid_best.pt" ||
 fi
 mkdir -p "${R}/checkpoints"
 echo "${R}" > results/v52_pgm_last_run.txt
+echo "V5.2 disjoint new VALID: 933 TRAIN / 104 NEW VALID; 115 OLD VALID excluded."
 echo "V5.2 fixed preregistered pilot: MELD train split seed ${SPLIT_SEED}, train seed ${TRAIN_SEED}, epochs ${EPOCHS}"
 echo "Original and modified model are freshly initialized with the SAME seed."
 echo "No --evaluate-test and no --eval-only options used."
@@ -30,7 +33,7 @@ echo "Original baseline started"
 "${PY}" -u -m scripts.train_research \
   --dataset MELD --seed "${TRAIN_SEED}" \
   --split-seed "${SPLIT_SEED}" \
-  --speaker-mode off --precontext-mode off \
+  --speaker-mode off --precontext-mode off --v52-clean-split \
   --v52-pgm-mode original \
   --epochs "${EPOCHS}" \
   --run-name v52_original \
@@ -41,7 +44,7 @@ echo "Direction-aligned PGM training started"
 "${PY}" -u -m scripts.train_research \
   --dataset MELD --seed "${TRAIN_SEED}" \
   --split-seed "${SPLIT_SEED}" \
-  --speaker-mode off --precontext-mode off \
+  --speaker-mode off --precontext-mode off --v52-clean-split \
   --v52-pgm-mode direction_aligned \
   --epochs "${EPOCHS}" \
   --run-name v52_direction_aligned \
@@ -64,7 +67,7 @@ if report["split"] != "validation_only" or len(report["models"]) != 2:
     raise RuntimeError("unexpected validation comparison schema")
 base, aligned = report["models"]
 print("\nV5.2 PILOT — matched original CSS vs normalized-direction PGM")
-print("Both runs: MELD seed=10068, fresh split=24117, max epochs=60, no TEST")
+print("Both runs: MELD train seed=10068, split seed=24117, 933 train / 104 NEW valid, 115 OLD valid excluded, 60 epochs, no TEST")
 for name in ("all", "first", "stable", "changed",
              "stable_after_other", "changed_after_other"):
     b = base["scores"][name]["weighted_f1"]
