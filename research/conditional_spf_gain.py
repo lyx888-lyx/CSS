@@ -36,20 +36,20 @@ def previous_different_speaker_indices(speaker_ids, valid_mask):
     if speaker_ids.ndim != 2 or valid_mask.shape != speaker_ids.shape:
         raise ValueError("speaker_ids and valid_mask must be [B,L]")
     B, L = speaker_ids.shape
-    out = torch.full_like(speaker_ids.long(), -1)
     valid = valid_mask.bool()
-    for b in range(B):
-        for j in range(L):
-            if not bool(valid[b, j].item()):
-                continue
-            for k in range(j - 1, -1, -1):
-                if bool(valid[b, k].item()) and (
-                    int(speaker_ids[b, k].item())
-                    != int(speaker_ids[b, j].item())
-                ):
-                    out[b, j] = k
-                    break
-    return out
+    # Tensor-only O(B*L^2) masking, no .item() CPU/GPU synchronization
+    # inside batch loops. MELD's dialogues are short and padded.
+    pos = torch.arange(L, device=speaker_ids.device)
+    earlier = pos[None, :] < pos[:, None]  # [target, source]
+    differing = speaker_ids[:, :, None] != speaker_ids[:, None, :]
+    permitted = (
+        earlier[None, :, :]
+        & differing
+        & valid[:, :, None]
+        & valid[:, None, :]
+    )
+    positions = pos[None, None, :].expand(B, L, L)
+    return positions.masked_fill(~permitted, -1).max(dim=-1).values
 
 
 def cosine_distance(x, y):
