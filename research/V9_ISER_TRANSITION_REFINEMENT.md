@@ -122,3 +122,44 @@ If it shows promising gains, lock the method and confirm on
 independent data/splits and multiple seeds. Dynamic transitions
 and decision correction are existing ideas; novelty is NOT
 established by implementation nor any one-run improvement.
+
+
+## User-run V9 outcome (2026-11-18) — NO-GO
+
+Frozen original CSS, existing 846 TRAIN / 87 previously inspected VALID
+dialogues (875 utterances), seed10068, no official TEST. All refinement
+arms used identical eligible-turn mask (469 eligible turns).
+
+| Arm | Overall W-F1 | Changed | Changed-after-other | Fixed | Broken | Class flips |
+|---|---:|---:|---:|---:|---:|---:|
+| CSS_full | 76.14 | 66.79 | 70.88 | 0 | 0 | 0 |
+| CSS_residual | 76.43 | 67.85 | 71.86 | 4 | 2 | 8 |
+| self | 76.51 | 67.42 | 71.60 | 4 | 2 | 10 |
+| conditional | 74.59 | 63.09 | 66.23 | 4 | 16 | 29 |
+| incremental | 75.28 | 64.88 | 68.45 | 5 | 11 | 25 |
+| shuffled | 75.40 | 65.57 | 69.26 | 8 | 12 | 26 |
+
+Report: results/v9_iser/six_arm_validation.json and adjacent .pt.
+
+ISER falls short of the prespecified 77.14 overall / 69.00 Changed
+aspiration, loses to original CSS (-0.86 pp), residual-only (-1.15 pp)
+and shuffled context (-0.12 pp overall). No evidence of beneficial
+incremental predictive information from this specific other-speaker
+transition implementation. Shuffled also harms performance: this
+does not prove real context is universally harmful. Self +0.37 pp
+over CSS is only +0.08 over residual-only; not a verified gain.
+
+Possible mechanisms, NOT established: train in-sample posterior
+distribution differs from valid; raw interval mean discards
+trigger/order information; redundant correction overlaps existing
+bidirectional contextual encoding. Marginal reference transition
+is observational, not pure intra-speaker causal effect.
+
+Decision: NO-GO. Stop gain/hidden-size/loss/epoch sweeps and do not
+reuse the 87-dialogue validation for further architecture search.
+Keep CSS as a reproducible comparator. Reassess baseline feature
+quality and a new development protocol before any new model effort.
+Prioritize dyadic IEMOCAP as the primary target aligned to the
+supervisor's question, with MELD as a complementary multiparty
+dataset. Preserve test and compare matching features/protocols.
+No established novel method or generalization result.
