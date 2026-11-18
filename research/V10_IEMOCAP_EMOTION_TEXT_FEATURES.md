@@ -109,3 +109,37 @@ and multiseed evaluation, capacity-matched controls and a genuinely
 specific response-encoding mechanism. Do not compare raw numbers against
 prior MELD or official test scores. If neither improves, do not endlessly
 adjust text history window, pooling, or scale on session 4.
+
+
+## User-run V10 results — fixed IEMOCAP session 4 development set
+
+TRAIN: sessions 1–3, 90 dialogues / 4298 turns. VALID: session 4,
+30 dialogues / 1512 turns. Same seed61078 and 200 epochs. No TEST.
+
+| Group | N | Original | Current | Speaker context |
+|---|---:|---:|---:|---:|
+| all | 1512 | 68.41 | 68.32 | 68.08 |
+| first | 60 | 73.31 | 73.15 | 67.99 |
+| stable | 1034 | 75.42 | 75.70 | 75.49 |
+| changed | 418 | 50.48 | 49.56 | 49.79 |
+| stable_after_other | 685 | 74.60 | 74.86 | 74.82 |
+| changed_after_other | 310 | 49.75 | 49.90 | 50.57 |
+
+Selected epochs: 184 / 188 / 188.
+Source: results/v10_iemocap/paired/report.json.
+Both enhanced arms fail to beat original on overall W-F1. The
+context arm improves changed_after_other by +0.82 pp over original
+and +0.67 pp over current but does not improve all changed turns.
+This is a single-session/seed exploratory subgroup observation,
+not independent validation or causal evidence. The original
+stable-minus-changed W-F1 gap is 24.94 pp; subgroup class mixes and
+difficulty may differ. Do not infer that all of this gap is due
+to other-speaker effects.
+
+Decision: stop this frozen GoEmotions feature append route.
+No window, scale, or model selection sweeps on session 4.
+Retain CSS as a comparator and reconsider a baseline with
+trainable task-adaptable audio/text encoders, e.g. EMART, after
+checking the user's earlier reproduction result and protocol.
+A new backbone alone is not a novel method. The official TEST
+must not select future models or hyperparameters.
