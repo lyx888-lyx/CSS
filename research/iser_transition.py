@@ -23,8 +23,9 @@ def normalize_modalities(*modalities):
         raise ValueError("expected unpadded [turn, dimension] modalities")
     if len({len(x) for x in modalities}) != 1:
         raise ValueError("modalities have different dialogue length")
+    scale = math.sqrt(sum(x.shape[-1] for x in modalities) / len(modalities))
     return torch.cat([
-        F.normalize(x.float(), dim=-1, eps=EPS) * math.sqrt(x.shape[-1])
+        F.normalize(x.float(), dim=-1, eps=EPS) * scale
         for x in modalities
     ], dim=-1)
 
