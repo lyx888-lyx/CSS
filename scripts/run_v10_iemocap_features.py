@@ -121,6 +121,9 @@ def train_arm(ds, cache, tr, va, mode, device, root, epochs):
         loss, acc, _, _, _, train_f1 = trainer.train_or_eval_model(
             model,loss_fn,kl_fn,train_loader,e,optimizer=opt,train=True)
         valid_acc, _, _, _, valid_f1 = trainer.evaluate_loaded_model(model,valid_loader)
+        # sklearn metrics may return numpy.float64. Save only native Python
+        # metadata so torch.load(weights_only=True) can deserialize safely.
+        valid_acc, valid_f1 = float(valid_acc), float(valid_f1)
         if (valid_f1,valid_acc) > best:
             best=(valid_f1,valid_acc)
             torch.save(dict(model_state_dict=model.state_dict(),config=cfg,
