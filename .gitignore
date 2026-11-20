@@ -11,3 +11,6 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 .env
+
+# Local generated experiment reports and checkpoints; keep on server, not GitHub
+results/
