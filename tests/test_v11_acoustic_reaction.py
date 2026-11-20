@@ -44,7 +44,9 @@ class TestV11AcousticReaction(unittest.TestCase):
         valid=torch.ones(1,5,dtype=torch.bool)
         a=acoustic_reaction_features(audio,speaker,valid)[0]
         changed=audio.clone()
-        changed[:,3]+=8
+        # Perturb one frequency/embedding coordinate: a uniform +8 shift
+        # would be canceled by LayerNorm and is not a valid sensitivity test.
+        changed[:,3,0]+=8
         b=acoustic_reaction_features(changed,speaker,valid)[0]
         torch.testing.assert_close(a[:,4,:8],b[:,4,:8])
         self.assertGreater(float((a[:,4,8:]-b[:,4,8:]).abs().sum()),0)
@@ -73,6 +75,22 @@ class TestV11AcousticReaction(unittest.TestCase):
         out=m(x,speakers,valid)
         torch.testing.assert_close(out[:,:3],x[:,:3])
         self.assertGreater(float((out[:,3:]-x[:,3:]).abs().sum()),0)
+
+    def test_training_factory_enables_v11_without_altering_old_checkpoints(self):
+        from scripts.train_research import build_model
+        cfg=dict(dataset="IEMOCAP",temp=1,audio=1582,heads=2,
+                 rank=4,order=3,classes=6,hidden_dim=32,speakers=2,
+                 dropout=0.1,speaker_mode="off",time_decay=True,
+                 max_lag=None,precontext_mode="off",v61_spf_mode="full")
+        torch.manual_seed(116)
+        original=build_model(cfg)
+        self.assertIsNone(original.v11_acoustic_refiner)
+        torch.manual_seed(116)
+        enabled=build_model({**cfg,"v11_acoustic_mode":"reaction"})
+        self.assertEqual(enabled.v11_acoustic_mode,"reaction")
+        self.assertIsNotNone(enabled.v11_acoustic_refiner)
+        for key,tensor in original.state_dict().items():
+            torch.testing.assert_close(tensor,enabled.state_dict()[key])
 
     def test_same_base_model_seed_and_identical_v11_arm_parameters(self):
         kwargs=dict(dataset="IEMOCAP",temp=1,D_text=1024,
