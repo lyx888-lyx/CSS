@@ -188,6 +188,7 @@ def build_model(config):
             else config["precontext_mode"]
         ),
         v8_spf_mode=config.get("v8_spf_mode", "off"),
+        v11_acoustic_mode=config.get("v11_acoustic_mode", "off"),
     )
     model.last_gate.ablation_mode = config.get("v61_spf_mode", "full")
     if model.last_gate.ablation_mode not in ("full", "residual_only"):
