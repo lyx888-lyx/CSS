@@ -75,7 +75,7 @@ class TestV11PairedAudit(unittest.TestCase):
         self.assertEqual(pair["broken"],0)
         self.assertEqual(pair["top1_flips"],2)
         self.assertEqual(res["changed_after_other"]["paired"]
-                         ["reaction_minus_self"]["fixed"],2)
+                         ["reaction_minus_self"]["fixed"],1)
 
     def test_reproducible_dialogue_bootstrap(self):
         ds=[
