@@ -195,6 +195,7 @@ def print_decision(folds,pooled):
     print("This is exploratory linear-probe evidence, NOT CSS accuracy,")
     print("NOT official TEST, NOT proof of emotional causality,")
     print("and NOT sufficient to claim top-conference novelty.")
+    return bool(screening_pass), int(consistent)
 
 
 def main():
@@ -212,8 +213,17 @@ def main():
         print("Preflight complete. No classifier trained, no TEST scored.")
         return
     folds,pooled,y,changed,pred=run_folds(ex,smoke=args.smoke)
-    print_decision(folds,pooled)
+    screen_passed,positive_folds=print_decision(folds,pooled)
     report={
+        "prespecified_screen":{
+            "passed":screen_passed,
+            "positive_folds":positive_folds,
+            "required_positive_folds":3,
+            "min_pooled_real_vs_a_pp":0.50,
+            "min_pooled_real_vs_shuffled_pp":0.50,
+            "min_pooled_real_vs_replaced_pp":0.50,
+            "is_final_css_result":False,
+        },
         "protocol":{
             "dataset":"IEMOCAP",
             "input_partition":"OFFICIAL_TRAIN_ONLY",
