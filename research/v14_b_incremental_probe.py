@@ -27,6 +27,24 @@ def session_of(vid):
     return name[:5]
 
 
+def validate_train_session_counts(counts, n_dialogues):
+    """Check official TRAIN coverage, not an invented equal-session split.
+
+    The original CSS/IEMOCAP TRAIN has 120 dialogues across Ses01–04,
+    but different sessions need not contain exactly 30 dialogues.
+    Source-derived per-session counts must be retained and reported.
+    """
+    actual=set(counts)
+    expected=set(SESSIONS)
+    if (n_dialogues!=120 or actual!=expected or
+            any(int(counts[s])<=0 for s in SESSIONS) or
+            sum(int(counts[s]) for s in SESSIONS)!=n_dialogues):
+        raise ValueError(
+            "Expected 120 unique official TRAIN dialogues across "
+            f"Ses01–Ses04 (unequal per-session counts allowed); got {dict(counts)}"
+        )
+
+
 def make_projection(seed=PROJECTION_SEED):
     """Fixed, label-free Rademacher maps shared across A and B."""
     rng=np.random.default_rng(seed)
@@ -67,9 +85,8 @@ def build_aba_examples(ds,strict=True,projection=None):
     if len(keys)!=len(set(keys)):
         raise ValueError("duplicate dialogue IDs")
     counts=Counter(session_of(vid) for vid in keys)
-    if strict and (len(keys)!=120 or set(counts)!=set(SESSIONS) or
-                   any(counts[s]!=30 for s in SESSIONS)):
-        raise ValueError(f"expected 30 official TRAIN dialogues per session: {counts}")
+    if strict:
+        validate_train_session_counts(counts, len(keys))
     rows=[]
     total=0
     for vid in keys:
