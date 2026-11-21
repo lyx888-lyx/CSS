@@ -180,6 +180,18 @@ def print_decision(folds,pooled):
     )
     print(f"\nReal B beat BOTH A-only and mean shuffled B in "
           f"{consistent}/{len(folds)} held-out original TRAIN sessions.")
+    screening_pass=(
+        len(folds)==4
+        and real-a>=0.50
+        and real-shuf>=0.50
+        and real-replaced>=0.50
+        and consistent>=3
+    )
+    print("V14 prespecified screening:",(
+        "POSITIVE SIGNAL (NOT proof of a novel method)"
+        if screening_pass else
+        "NO SUFFICIENT SIGNAL under this fixed linear probe"
+    ))
     print("This is exploratory linear-probe evidence, NOT CSS accuracy,")
     print("NOT official TEST, NOT proof of emotional causality,")
     print("and NOT sufficient to claim top-conference novelty.")
