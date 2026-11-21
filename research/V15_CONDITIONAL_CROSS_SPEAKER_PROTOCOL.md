@@ -137,3 +137,73 @@ V14/V15 的 probe 指标不能拿来与 CSS 的 75.28%
 或论文的 75.66% 直接比较。
 之前 V11–V13 已反复查看官方 Session5 TEST，
 后续 IEMOCAP 的 TEST 也不能宣称从未接触。
+
+
+## 2026-11-21 用户服务器 V15 完整结果：正式 NO-GO
+
+已按照事先固定的 4 个原始 TRAIN Session 留一会话、
+3 个训练随机种子 (61078/61079/61080)、冻结 A-only、
+12 epoch 匹配容量修正头及同 Session/说话人角色/异对话
+Shuffled B 对照完成实验；没有对官方 Ses05 TEST 推断或打分。
+
+所有数值为 TRAIN-only out-of-fold Weighted F1 **百分比**，
+不是 CSS 官方 TEST 论文指标：
+
+| Seed | A-only | Self | Real B | Shuffled B | Real B replaced |
+|---|---:|---:|---:|---:|---:|
+| 61078 | 61.62 | 61.44 | 61.31 | 61.94 | 61.47 |
+| 61079 | 63.41 | 63.14 | 63.43 | 63.48 | 62.93 |
+| 61080 | 62.27 | 61.65 | 62.20 | 61.60 | 61.32 |
+
+原始运行脚本的无四舍五入汇总差异（Real B 相比）：
+- 冻结 A-only：**-0.1139521 pp**；
+- Self 同容量修正头：**+0.2387594 pp**；
+- 训练时使用 Shuffled B 的同容量修正头：**-0.0225293 pp**；
+- Real B 模型、评估时 B 被替换：**+0.4128338 pp**。
+
+三个 seed 的四折中，满足“Real B 同时优于冻结 A、
+Self、Shuffled B”的会话数，均未达到 3/4；
+`seeds_with_at_least_3_of_4_positive_sessions=0`。
+预先固定的四项平均差异门槛均至少 +0.50pp，
+实际至少三项没有达到，且 Real B 平均略低于 A-only
+与 Shuffled B。
+
+**决策：V15 SCREEN FAILED / NO-GO。**
+不应再通过更改 seed、learning rate、训练轮次、
+修正强度 1.75、正则系数 0.02 等追逐
+同一批开发会话已查看的分数，也不应立即将这条
+方案投入完整 CSS 200 epoch 训练。
+
+### 这能证明什么、不能证明什么
+
+- 结果可以支持：在固定的随机压缩特征、A-only 小网络
+  和保守非线性纠错头方案中，真实 B 没有带来稳定的
+  额外分类收益；即使模型对 B 替换有一定敏感性，
+  这种依赖也不等于性能价值。
+- 不能证明“B 永远不影响 A 的情绪”；该任务仍限于
+  一个受压缩的轻量诊断，且原始 CSS 已经利用双向的
+  全对话上下文，因此新增独立 B 分支也可能
+  与现有 CSS 的能力重叠。
+- V15 的任何数字都不能与 CSS TEST W-F1 75.28%
+  或论文 75.66% 直接比较。
+- 不要把上述四折/三种子结果当作 12 个独立数据集；
+  四折交叉使用同一原始 TRAIN 语料，随机种子只是
+  重复初始化。
+
+下一步仅建议 **无训练的误差审计**：
+从已保存 `results/v15_conditional_cross_speaker/report.json`
+的 `seed_results[*].pooled_labels`、
+`pooled_predictions` 与 `pooled_changed_for_posthoc_only`
+核对 Real B vs A-only/Self/Shuffled 的修正数、
+新增错误数、对话情绪变化组的表现及
+`folds[*].prediction_flip_fraction`。
+不能利用这些分析再调节同一个方案的阈值。
+
+长期研究应先重新审视任务定义和独立的新证据，
+在文献排重的基础上提出**新的可证伪机制**，
+而不是把 V11–V15 失败方案微调为“V16”。
+原 IEMOCAP Ses05 TEST 已被多次使用，未来论文中的
+正式性能证明需要披露历史并最好增加独立数据集评估。
+
+用户服务器上的原始结果位置（此提交没有重新计算）：
+`results/v15_conditional_cross_speaker/report.json`。
