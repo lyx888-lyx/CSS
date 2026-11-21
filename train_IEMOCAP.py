@@ -83,7 +83,7 @@ def get_IEMOCAP_loaders(batch_size=32, valid=0.1, num_workers=0, pin_memory=Fals
     return train_loader, valid_loader, test_loader
 
 
-def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimizer=None, train=False):
+def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimizer=None, train=False, auxiliary_loss_fn=None):
     losses, preds, labels, masks = [], [], [], []
     PGM_loss = PGM(loss_function, kl_loss)
 
@@ -138,6 +138,12 @@ def train_or_eval_model(model, loss_function, kl_loss, dataloader, epoch, optimi
             umask,
             shared_params
         )
+
+        # V13 opt-in training-only pretext objective. None preserves the
+        # original CSS numerical and gradient behavior exactly.
+        # Run AFTER original PGM gradient-balancing so PGM is unmodified.
+        if train and auxiliary_loss_fn is not None:
+            loss = loss + auxiliary_loss_fn(model, acouf, qmask, umask)
 
         all_prob = outputs[4]
         pred_ = torch.argmax(all_prob.view(-1, all_prob.size()[2]), 1)
