@@ -153,3 +153,69 @@ A positive TEST-selected delta can motivate a fresh strict,
 pre-registered independently selected protocol, but is
 insufficient proof of robust contribution or conference novelty.
 The previous V11 Session-4 results remain separate and labeled.
+
+
+## 2026-11-21 — User-run V12 complete benchmark: BASELINE REPRODUCED, BOTH METHODS NO-GO
+
+All three are author-style FULL original TRAIN:
+- IEMOCAP Session 1–4 TRAIN, 120 dialogues, 5810 utterances.
+- Official Session 5 TEST, 1623 utterances.
+- Original PGM/SPF and original feature files; seed61078; 200 epochs.
+- Historical author TEST-F1-per-epoch checkpoint selection
+  (not independent, TEST is reused); 3 method checkpoints
+  were fixed architectures before this run.
+
+| Arm | Chosen epoch (TEST selected) | TEST ACC | TEST W-F1 | TEST Macro-F1 | Delta W-F1 vs original |
+|---|---:|---:|---:|---:|---:|
+| Original CSS | 106 | 75.17 | **75.28** | 74.30 | baseline |
+| Self acoustic shift | 96 | 74.12 | 74.38 | 73.34 | **-0.90 pp** |
+| Other-speaker reaction | 94 | 73.94 | 74.06 | 72.79 | **-1.22 pp** |
+
+Reference CSS paper Table 1: ACC 75.42, W-F1 75.66.
+Reproduction gap: -0.25pp ACC, -0.38pp W-F1.
+
+Paired TEST correctness relative to original:
+- Self: fixed 44, broken 61, net 17 fewer correct, 117 raw top1 flips.
+- Reaction: fixed 73, broken 93, net 20 fewer correct, 195 raw top1 flips.
+  A raw top1 flip is not necessarily a fixed/broken correctness change.
+
+| Label | Original class F1 | Self F1 | Reaction F1 |
+|---|---:|---:|---:|
+| happy | 64.94 | 62.91 | 60.54 |
+| sad | 82.30 | 80.93 | 80.88 |
+| neutral | 77.47 | 77.10 | 77.26 |
+| angry | 68.95 | 69.75 | 69.54 |
+| excited | 82.65 | 79.86 | 78.29 |
+| frustrated | 69.50 | 69.52 | 70.25 |
+
+**Interpretation:**
+1. Full TRAIN restored the exact prior original CSS TEST reproduction
+   W-F1=75.28%. V10/V11 69–71% results reflected a **different
+   TRAIN/VALID design**; do not conflate them with paper-level protocol.
+2. Under source-faithful same-protocol comparison, both V11-inspired
+   acoustic alternatives underperform CSS. Reaction does not even
+   outperform Self: 74.06 vs 74.38. V12 is **NO-GO**.
+3. No evidence for a reproducible novel cross-speaker emotion-response
+   improvement. Keep complete reports, checkpoint provenance and the
+   negative result. Do not rescan hyperparameters, epochs or seeds
+   using this already-viewed TEST as a development set.
+4. Every V12 score is **TEST-selected every epoch** as in the original
+   source. These are historical author-comparable numbers, NOT
+   unbiased generalization. The CSS official Session-5 TEST has also
+   been inspected repeatedly during V11/V12 research.
+5. For the next truly distinct innovation hypothesis, first define a
+   TRAIN-only, locked session-aware repeated-development experiment
+   and a full-TRAIN final training schedule derived without TEST.
+   Keep TEST out of new method/parameter selection; any eventual
+   Session-5 score must transparently acknowledge prior exposure.
+6. Do not create V13 as an uninformed small feature gate. Require a
+   falsifiable question and same-capacity controls based on independent
+   TRAIN-only evidence; assess other-speaker *incremental* information
+   beyond self shift rather than interpreting subgroup associations
+   as causal influence.
+
+Sources (user server, not available through GitHub):
+- `results/v12_original_css_author_protocol/author_test_selected/original/report.json`
+- `results/v12_original_css_author_protocol/author_test_selected/self/report.json`
+- `results/v12_original_css_author_protocol/author_test_selected/reaction/report.json`
+- `python -m scripts.summarize_v12_author_protocol` console report.
