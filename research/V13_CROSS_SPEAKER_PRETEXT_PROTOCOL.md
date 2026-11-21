@@ -157,3 +157,58 @@ bottleneck, epochs or speaker window on the already viewed
 IEMOCAP Session-5 TEST. At that point assess the design
 mechanistically on TRAIN only and use an independently
 available corpus before another novelty claim.
+
+
+## User-run V13 FULL original TRAIN results — 2026-11-21 (FINAL NO-GO)
+
+The user ran both fixed self/cross V13 arms under the source-faithful
+IEMOCAP protocol: TRAIN Ses01–04, 5,810 utterances; TEST Ses05, 1,623;
+seed61078, 200 epochs; TEST weighted-F1 selected checkpoint per epoch.
+The CSS baseline is the preserved V12 original CSS checkpoint/report.
+These are **TEST-selected historical benchmark scores**, not untouched
+TEST generalization.
+
+| Arm | TEST-selected epoch | TEST ACC | TEST W-F1 | TEST macro-F1 | Δ W-F1 vs CSS |
+|---|---:|---:|---:|---:|---:|
+| Original CSS | 106 | 75.17 | 75.28 | 74.30 | 0.00 pp |
+| V13 Self pretext | 127 | 74.61 | 74.75 | 73.88 | -0.53 pp |
+| V13 Cross pretext | 127 | 74.68 | 74.83 | 73.95 | -0.45 pp |
+
+Published CSS historical IEMOCAP W-F1=75.66%. Neither V13 arm
+exceeds the **reproduced** CSS W-F1=75.28, let alone 75.66.
+Cross's marginal advantage over Self is +0.08 pp W-F1;
+paired correctness has only +1 net correct utterance for Cross
+versus Self (12 fixed, 11 broken, 26 total top1 prediction flips).
+This is far too weak to establish incremental cross-speaker information.
+
+Paired correctness relative to CSS:
+- Self: 21 fixed, 30 broken, 9 net fewer correct, 57 top1 flips.
+- Cross: 25 fixed, 33 broken, 8 net fewer correct, 65 top1 flips.
+
+Per-class F1 (CSS / Self / Cross):
+- happy: 64.94 / 65.18 / 64.38
+- sad: 82.30 / 81.26 / 81.34
+- neutral: 77.47 / 76.57 / 76.48
+- angry: 68.95 / 69.59 / 70.59
+- excited: 82.65 / 80.63 / 80.71
+- frustrated: 69.50 / 70.03 / 70.23
+
+**Decision: V13 STOP / NO-GO.** Do not retune the auxiliary loss
+coefficient 0.05, InfoNCE temperature 0.2, bottleneck 256,
+A-B-A history window, optimizer, random seed, or checkpoint epoch
+using these already observed TEST patterns. The auxiliary task
+predicts acoustics, not emotion; its relationship to emotion
+recognition is a *possible explanation* for the negative result,
+not a verified mechanism.
+
+Preserve exact user-generated reports on the server:
+- `results/v13_cross_speaker_pretext/author_test_selected/self/report.json`
+- `results/v13_cross_speaker_pretext/author_test_selected/cross/report.json`
+- `results/v12_original_css_author_protocol/author_test_selected/original/report.json`
+
+Next scientific step (not V13 parameter tuning): formulate a
+distinct TRAIN-only hypothesis and test its incremental cross-speaker
+information on a locked TRAIN-internal session-aware protocol.
+Keep final source-comparable training on all original TRAIN sessions,
+but note all future IEMOCAP Session-5 evaluation has already been
+exposed during V11/V12/V13 and cannot be called untouched.
