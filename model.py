@@ -491,7 +491,7 @@ class Transformer_Based_Model(nn.Module):
                  n_classes, hidden_dim, n_speakers, dropout,
                  speaker_history_mode=None, speaker_history_decay=True,
                  speaker_history_lag=None, precontext_shift_mode=None,
-                 v8_spf_mode="off"):
+                 v8_spf_mode="off", v11_acoustic_mode="off"):
         super(Transformer_Based_Model, self).__init__()
         self.temp = temp
         self.n_classes = n_classes
@@ -596,6 +596,19 @@ class Transformer_Based_Model(nn.Module):
         else:
             self.v8_spf_gain = None
 
+        # Always append V11 after every original CSS parameter. Existing
+        # pre-trained checkpoints still use v11_acoustic_mode="off".
+        if v11_acoustic_mode not in ("off", "self", "reaction"):
+            raise ValueError("invalid V11 acoustic mode")
+        self.v11_acoustic_mode = v11_acoustic_mode
+        if v11_acoustic_mode == "off":
+            self.v11_acoustic_refiner = None
+        else:
+            from research.v11_acoustic_reaction import SpeakerRelativeAcousticReaction
+            self.v11_acoustic_refiner = SpeakerRelativeAcousticReaction(
+                dim=hidden_dim, mode=v11_acoustic_mode
+            )
+
     def forward(self, textf, visuf, acouf, u_mask, qmask, dia_len):
         spk_idx = torch.argmax(qmask, -1)
         origin_spk_idx = spk_idx
@@ -611,6 +624,11 @@ class Transformer_Based_Model(nn.Module):
         textf = self.textf_input(textf.permute(1, 2, 0)).transpose(1, 2)
         acouf = self.acouf_input(acouf.permute(1, 2, 0)).transpose(1, 2)
         visuf = self.visuf_input(visuf.permute(1, 2, 0)).transpose(1, 2)
+
+        # V11: response-specific modification of projected acoustics,
+        # PRIOR to CSS unimodal / shared dialogue transformers. No labels.
+        if self.v11_acoustic_refiner is not None:
+            acouf = self.v11_acoustic_refiner(acouf, spk_idx, u_mask.bool())
 
         if self.dataset == 'MELD':
             text_bias = textf.detach()
