@@ -100,7 +100,7 @@ def evaluate(manifest, device, output):
         "train_sessions":[1,2,3],
         "dev_selection_session":4,
         "official_test_session":5,
-        "test_performance_viewed":False,
+        "official_test_access_started":True,
         "no_training_or_checkpoint_selection":True,
         "manifest":manifest,
         "warning":"Future V11 tuning after viewing TEST invalidates independent TEST claims"
