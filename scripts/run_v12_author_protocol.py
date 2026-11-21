@@ -14,8 +14,8 @@ AUTHOR-COMPARABLE PROTOCOL (not independently held-out performance):
 Run ORIGINAL FIRST and verify near the prior user 75.28% W-F1 result.
 Only then run self/reaction unchanged, same protocol.
 
---smoke runs one training epoch without loading/evaluating TEST.
---preflight prints original TRAIN/session checks without loading TEST.
+--smoke runs one training epoch without constructing a TEST loader or scoring TEST.
+--preflight checks original TRAIN/session keys without TEST inference/scoring.
 Full benchmark requires explicit --acknowledge-test-based-selection.
 """
 import argparse
@@ -60,7 +60,7 @@ def inspect_train():
         raise ValueError(f"expected 5810 TRAIN turns; got {n}")
     return dict(train_dialogues=len(keys),train_turns=n,
                 train_sessions=sorted(names),
-                test_not_loaded=True)
+                test_not_inferred_or_scored=True)
 
 
 def checksum(path):
@@ -108,7 +108,7 @@ def run(args):
     print("Train: ALL 120 dialogues / 5810 utterances (Ses01-04)")
     print("Original source: test-selected best epoch, no real validation split.")
     if args.preflight:
-        print("PREFLIGHT ONLY: no TEST loaded or scored.")
+        print("PREFLIGHT ONLY: no TEST loader/inference/scoring.")
         return
     if not args.smoke and not args.acknowledge_test_based_selection:
         raise ValueError(
@@ -158,7 +158,7 @@ def run(args):
     loss_fn=MaskedNLLLoss(weights)
     kl_fn=MaskedKLDivLoss()
     if args.smoke:
-        # One epoch TRAIN only: test partition is never instantiated.
+        # One epoch TRAIN only: no TEST Dataset/Loader is instantiated.
         train_ds=IEMOCAPDataset(train=True)
         sampler=torch.utils.data.SubsetRandomSampler(list(range(len(train_ds))))
         train_loader=torch.utils.data.DataLoader(
@@ -240,10 +240,10 @@ def run(args):
         (output_dir/"smoke.json").write_text(
             json.dumps({
                 "arm":arm,"train_dialogues":120,"train_utterances":5810,
-                "test_loaded":False,"test_evaluated":False,
+                "test_loader_instantiated":False,"test_evaluated":False,
                 "train_loss":float(tr_loss),"train_wf1":float(tr_f1),
             },indent=2)+"\n",encoding="utf-8")
-        print("Smoke passed. Did not open or evaluate TEST.",flush=True)
+        print("Smoke passed. No TEST loader/inference/scoring.",flush=True)
         return
 
     if not checkpoint_path.is_file() or best_epoch is None:
