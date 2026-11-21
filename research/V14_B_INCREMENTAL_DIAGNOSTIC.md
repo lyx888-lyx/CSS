@@ -23,7 +23,11 @@ CSS backbone, PGM, original baseline, checkpoint, or train partition**.
 
 Read `IEMOCAPDataset(train=True)` only, and iterate ONLY
 `ds.keys`, the official TRAIN keys Ses01–04, 120 dialogues,
-5810 utterances. The original feature pickle itself contains
+5810 utterances. Actual observed session dialogue counts are
+**Ses01=28, Ses02=30, Ses03=32, Ses04=30** (120 total);
+the original pickle does NOT guarantee 30 dialogues in each session.
+Preflight guards total=120, coverage=Ses01–04 and total
+TRAIN utterances=5810 without imposing an equal-session split. The original feature pickle itself contains
 TEST arrays as well, but the V14 code never accesses TEST keys,
 labels, sample predictions, or model scoring, and it never
 instantiates the `train=False` dataset.
