@@ -93,14 +93,44 @@ def build_head(mode):
     return head
 
 
+def count_train_aba_triples():
+    """Structural input count only, from original TRAIN speaker IDs."""
+    ds=IEMOCAPDataset(train=True)
+    eligible=0
+    total=0
+    for key in ds.keys:
+        speakers=ds.videoSpeakers[key]
+        labels=ds.videoLabels[key]
+        if len(speakers)!=len(labels):
+            raise ValueError(f"unaligned speaker/labels metadata: {key}")
+        most_recent={}
+        for i,sp in enumerate(speakers):
+            if sp not in ("M","F"):
+                raise ValueError(f"non-dyadic speaker ID: {key}/{sp}")
+            if sp in most_recent:
+                prev=most_recent[sp]
+                if any(other!=sp for other in speakers[prev+1:i]):
+                    eligible+=1
+            most_recent[sp]=i
+            total+=1
+    if total!=5810 or eligible<100:
+        raise RuntimeError(
+            f"Unexpected TRAIN structural coverage: total={total}, "
+            f"eligible={eligible}"
+        )
+    return eligible
+
+
 def execute(args):
     info=inspect_train()
     baseline=verify_baseline(args.original_report)
+    eligible=count_train_aba_triples()
     print("V13 CSS original-source comparable PRETEXT:")
     print(json.dumps(info,ensure_ascii=False))
     print("V12 frozen original benchmark:",baseline,flush=True)
     print("Fixed arms: self / cross | lambda=0.05, temp=0.2, bottleneck=256")
     print("TRAIN all official sessions 1-4, NO session-4 exclusion.")
+    print(f"Eligible label-free A-B-A TRAIN target turns: {eligible}/5810")
     if args.preflight:
         print("Preflight passed; no model training or TEST scoring.")
         return
