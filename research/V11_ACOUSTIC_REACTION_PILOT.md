@@ -146,3 +146,77 @@ end-to-end trainable speech encoder under a fresh protocol.
   match. An advantage needs negative controls and independent
   replications to attribute it to real inter-speaker response.
 - No code has been run on the user's GPU by the assistant.
+
+
+## User-run V11 session-4 development result — 2026-11-21
+
+Exact user-reported fixed same-protocol result:
+IEMOCAP session 1–3 TRAIN, session 4 VALID, 1512 utterances,
+seed61078, original 200-epoch CSS and two V11 new arm
+checkpoints selected by VALID W-F1. No official TEST.
+
+| Group | n | Original CSS | Self | Reaction |
+|---|---:|---:|---:|---:|
+| overall | 1512 | 68.41 | 68.67 | **68.96** |
+| first | 60 | **73.31** | 69.37 | 69.59 |
+| stable | 1034 | 75.42 | 76.06 | **76.51** |
+| changed | 418 | **50.48** | 49.74 | 50.10 |
+| stable-after-other | 685 | **74.60** | 74.42 | 74.58 |
+| changed-after-other | 310 | **49.75** | 48.22 | 47.99 |
+
+Paired correctness vs original:
+- self: 89 corrected / 78 newly incorrect / 204 raw top1 flips.
+- reaction: 124 corrected / 103 newly incorrect /
+  266 raw top1 flips.
+- Reaction vs Self on overall W-F1: +0.29 pp, not yet
+  directly decomposed into paired correctness changes.
+- Selected checkpoints original 184 / self 188 /
+  reaction 161 epochs.
+
+**Precommitted decision: NO-GO on a unique cross-speaker
+improvement claim.** Reaction improves overall W-F1 +0.55
+pp over CSS but fails required +1.0, only +0.29 over
+matched Self rather than +0.5, and degrades Changed by
+-0.38 and Changed-after-other by -1.76 pp.
+Its stable group improves +1.09 pp. Do not alter acoustic
+bottleneck, context window, LR, or loss coefficients to
+chase the already-exhausted Session-4 VALID.
+
+The correction count 124-103=+21 more correct utterances
+vs original, corresponding to a +21/1512=+1.39
+percentage-point accuracy change. W-F1 differs from
+accuracy; raw top1 flips=266 include wrong->other wrong.
+The first-turn group drops substantially despite no
+direct adapter change on first-turn audio: the entire CSS
+is retrained, including shared parameters and bidirectional
+contextual computation, and thus other turns' predictions
+can change indirectly. Do NOT claim an exact localized
+causal change.
+
+**Follow-up: report-only paired audit with no training:**
+
+```bash
+cd /code/CSS
+conda activate cmdpad
+git pull --ff-only origin experiment/v11-speaker-relative-acoustic-reaction
+
+python -m unittest discover -s tests \
+  -p 'test_v11_paired_analysis.py' -v
+
+python -u -m scripts.audit_v11_paired
+```
+
+New output:
+`results/v11_iemocap_acoustic_reaction/paired/v11_paired_uncertainty.json`
+and console output with reaction-vs-self paired fixes/breaks,
+class support, and 1500 whole-dialogue resamples of already
+inspected VALID. These percentile intervals are **descriptive
+and selected-on-validation**, not independent performance
+estimates or strong statistical significance claims.
+No official TEST, no training and no checkpoints are loaded.
+
+Next experiment selection must await the detailed error breakdown,
+then establish a fixed multisession/held-out speaker validation
+protocol and pre-register the next *distinct* method. V11
+overall gain alone is insufficient to call cross-speaker
+emotion change a solved problem.
