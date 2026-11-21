@@ -56,8 +56,7 @@ def summarize_groups(dialogues, names, groups=GROUPS):
     for group in groups:
         y, pred = [], {name: [] for name in names}
         for d in dialogues:
-            selected = d["group"] == group if group != "all" else (
-                np.ones(len(d["labels"]), dtype=bool))
+            selected = d["masks"][group]
             y.extend(d["labels"][selected].tolist())
             for name in names:
                 pred[name].extend(d["predictions"][name][selected].tolist())
