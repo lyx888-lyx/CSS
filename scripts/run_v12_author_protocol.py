@@ -185,6 +185,12 @@ def run(args):
             model,loss_fn,kl_fn,train_loader,epoch,
             optimizer=optimizer,train=True
         )
+        if not args.smoke:
+            # The original author script calls its EMPTY validation loader
+            # (valid=0.0) before TEST every epoch; faithfully retain it.
+            trainer.train_or_eval_model(
+                model,loss_fn,kl_fn,_valid_loader,epoch,train=False
+            )
         if args.smoke:
             print(f"V12 {arm} TRAIN-ONLY smoke epoch1 "
                   f"loss={tr_loss:.4f} acc={tr_acc:.2f} f1={tr_f1:.2f}",
