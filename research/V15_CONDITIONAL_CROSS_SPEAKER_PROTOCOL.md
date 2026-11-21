@@ -207,3 +207,30 @@ Self、Shuffled B”的会话数，均未达到 3/4；
 
 用户服务器上的原始结果位置（此提交没有重新计算）：
 `results/v15_conditional_cross_speaker/report.json`。
+
+
+### 只读误差审计（无需新训练、无需 TEST）
+
+为了区别“纠错头几乎没改变输出”与“纠错头改了却
+新增错误更多”，新增 V15 只读报告审计脚本：
+
+```bash
+cd /code/CSS
+conda activate cmdpad
+git pull --ff-only origin experiment/v15-conditional-cross-speaker-correction
+python -m unittest discover -s tests \
+  -p 'test_v15_train_only_audit.py' -v
+python -u -m scripts.audit_v15_train_only
+```
+
+输入仅使用已有的
+`results/v15_conditional_cross_speaker/report.json`，
+从三种子逐条 out-of-fold TRAIN 预测计算
+Real B 相比 A-only / Self / Shuffled B / B 替换模型
+的 fixed、broken、net_more_correct、
+raw_prediction_flips；并分别报告 changed/stable
+（真实变化标签仅作分析）。**无模型加载、无训练，
+不访问官方 TEST。** 结果输出到
+`results/v15_conditional_cross_speaker/audit_posthoc.json`。
+该审计只能解释已锁定 V15 的失败机制，不可以反过来
+用于阈值、随机种子、epoch 或纠错强度选模。
