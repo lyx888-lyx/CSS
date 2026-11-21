@@ -1,12 +1,14 @@
 """V14 synthetic CPU regression tests. Does not load IEMOCAP or TEST."""
 import unittest
+from collections import Counter
 
 import numpy as np
 
 from research.v14_b_incremental_probe import (
     SESSIONS, FEATURE_DIMS, make_projection, build_aba_examples,
     base_and_b_features, select_partition, shuffle_b_donors,
-    evaluate_fold, subgroup_metrics, _project_utterances
+    evaluate_fold, subgroup_metrics, _project_utterances,
+    validate_train_session_counts
 )
 
 
@@ -45,6 +47,29 @@ class FakeOriginalTrain:
 
 
 class TestV14Diagnostic(unittest.TestCase):
+    def test_real_unequal_session_distribution_is_valid(self):
+        # User's actual official TRAIN pickle: 28+30+32+30 = 120.
+        counts=Counter({
+            "Ses01":28,"Ses02":30,"Ses03":32,"Ses04":30
+        })
+        self.assertEqual(sum(counts.values()),120)
+        validate_train_session_counts(counts,120)
+
+    def test_missing_session_or_wrong_total_is_rejected(self):
+        good=Counter({
+            "Ses01":28,"Ses02":30,"Ses03":32,"Ses04":30
+        })
+        with self.assertRaises(ValueError):
+            validate_train_session_counts(good,119)
+        with self.assertRaises(ValueError):
+            validate_train_session_counts(
+                Counter({"Ses01":40,"Ses02":40,"Ses03":40}),120
+            )
+        with self.assertRaises(ValueError):
+            validate_train_session_counts(
+                Counter({"Ses01":28,"Ses02":30,"Ses03":32,"Ses05":30}),120
+            )
+
     @classmethod
     def setUpClass(cls):
         cls.ds=FakeOriginalTrain()
