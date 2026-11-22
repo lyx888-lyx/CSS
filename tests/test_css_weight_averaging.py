@@ -40,7 +40,7 @@ class TestCSSWeightAverage(unittest.TestCase):
         self.assertEqual(ema.count,3)
         self.assertEqual(swa.count,3)
         self.assertAlmostEqual(float(ema.get_state()["l.weight"][0,0]),5.5)
-        self.assertAlmostEqual(float(swa.get_state()["l.weight"][0,0]),14/3)
+        # SWA state is float32: 14/3 rounds to 4.6666665, so use an\n        # absolute tolerance appropriate for float32, not 7 decimal places.\n        self.assertAlmostEqual(\n            float(swa.get_state()["l.weight"][0,0]),14/3,delta=1e-6\n        )
         self.assertEqual(int(ema.get_state()["step"]),4)
         self.assertEqual(int(swa.get_state()["step"]),4)
         self.assertAlmostEqual(float(self.model.l.weight),8.0)
